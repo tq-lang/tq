@@ -12,3 +12,11 @@ Desktop.ini
 # Linux
 *~
 .directory
+
+# Go
+/tq
+/dist/
+*.exe
+*.test
+*.out
+vendor/
