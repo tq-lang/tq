@@ -1,0 +1,29 @@
+version: 2
+
+builds:
+  - main: ./cmd/tq
+    binary: tq
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+changelog:
+  use: git
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs:"
+      - "^ci:"
