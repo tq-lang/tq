@@ -15,48 +15,60 @@ import (
 	"github.com/tq-lang/tq/internal/output"
 )
 
+// Exit codes matching jq conventions.
+const (
+	exitOK       = 0
+	exitUsage    = 2 // bad flags, I/O errors
+	exitCompile  = 3 // filter parse/compile error
+	exitNoOutput = 4 // --exit-status with no output
+	exitRuntime  = 5 // jq filter runtime error
+)
+
 var version = "dev"
 
 func main() {
 	os.Exit(run())
 }
 
-func run() int {
-	var (
-		jsonOutput   bool
-		toonOutput   bool
-		rawOutput    bool
-		compact      bool
-		slurp        bool
-		nullInput    bool
-		joinOutput   bool
-		tab          bool
-		indent       int
-		exitStatus   bool
-		stream       bool
-		delimiter    string
-		fromFile     string
-		showVersion  bool
-		argPairs     []string
-		argjsonPairs []string
-	)
+// config holds parsed CLI flags.
+type config struct {
+	jsonOutput bool
+	toonOutput bool
+	rawOutput  bool
+	compact    bool
+	slurp      bool
+	nullInput  bool
+	joinOutput bool
+	tab        bool
+	indent     int
+	exitStatus bool
+	stream     bool
+	delimiter  string
+	fromFile   string
+	version    bool
+	argPairs   []string
+	argjsonPairs []string
+}
 
-	flag.BoolVar(&jsonOutput, "json", false, "output JSON instead of TOON")
-	flag.BoolVar(&toonOutput, "toon", false, "output TOON (default)")
-	flag.BoolVarP(&rawOutput, "raw-output", "r", false, "output raw strings")
-	flag.BoolVarP(&compact, "compact-output", "c", false, "compact output")
-	flag.BoolVarP(&slurp, "slurp", "s", false, "read entire input into array")
-	flag.BoolVarP(&nullInput, "null-input", "n", false, "run filter without reading input")
-	flag.BoolVarP(&joinOutput, "join-output", "j", false, "no newline between outputs")
-	flag.BoolVar(&tab, "tab", false, "use tab for indentation")
-	flag.IntVar(&indent, "indent", 0, "number of spaces for indentation")
-	flag.BoolVarP(&exitStatus, "exit-status", "e", false, "set exit code based on output")
-	flag.BoolVar(&stream, "stream", false, "output path-value pairs for streaming")
-	flag.StringVar(&delimiter, "delimiter", "", "TOON output delimiter: comma, tab, pipe")
-	flag.StringVarP(&fromFile, "from-file", "f", "", "read filter from file")
-	flag.BoolVar(&showVersion, "version", false, "print version")
-	flag.StringArrayVar(&argPairs, "arg", nil, "set variable: --arg name value")
-	flag.StringArrayVar(&argjsonPairs, "argjson", nil, "set JSON variable: --argjson name value")
+func parseFlags() (*config, []string) {
+	cfg := &config{}
+
+	flag.BoolVar(&cfg.jsonOutput, "json", false, "output JSON instead of TOON")
+	flag.BoolVar(&cfg.toonOutput, "toon", false, "output TOON (default)")
+	flag.BoolVarP(&cfg.rawOutput, "raw-output", "r", false, "output raw strings")
+	flag.BoolVarP(&cfg.compact, "compact-output", "c", false, "compact output")
+	flag.BoolVarP(&cfg.slurp, "slurp", "s", false, "read entire input into array")
+	flag.BoolVarP(&cfg.nullInput, "null-input", "n", false, "run filter without reading input")
+	flag.BoolVarP(&cfg.joinOutput, "join-output", "j", false, "no newline between outputs")
+	flag.BoolVar(&cfg.tab, "tab", false, "use tab for indentation")
+	flag.IntVar(&cfg.indent, "indent", 0, "number of spaces for indentation")
+	flag.BoolVarP(&cfg.exitStatus, "exit-status", "e", false, "set exit code based on output")
+	flag.BoolVar(&cfg.stream, "stream", false, "output path-value pairs for streaming")
+	flag.StringVar(&cfg.delimiter, "delimiter", "", "TOON output delimiter: comma, tab, pipe")
+	flag.StringVarP(&cfg.fromFile, "from-file", "f", "", "read filter from file")
+	flag.BoolVar(&cfg.version, "version", false, "print version")
+	flag.StringArrayVar(&cfg.argPairs, "arg", nil, "set variable: --arg name value")
+	flag.StringArrayVar(&cfg.argjsonPairs, "argjson", nil, "set JSON variable: --argjson name value")
 
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, `Usage: tq [flags] <filter> [file...]
@@ -77,37 +89,19 @@ Flags:
 	}
 
 	flag.Parse()
+	return cfg, flag.Args()
+}
 
-	if showVersion {
-		fmt.Println("tq " + version)
-		return 0
-	}
+// resolveFilter determines the jq filter expression and remaining file args.
+func resolveFilter(cfg *config, args []string) (filterExpr string, fileArgs []string, rc int) {
+	filterExpr = "."
+	fileArgs = args
 
-	// Parse --arg pairs (expects even number: name value name value ...)
-	args, code := parseVarPairs(argPairs, "arg", false)
-	if code != 0 {
-		return code
-	}
-	argsJSON, code := parseVarPairs(argjsonPairs, "argjson", true)
-	if code != 0 {
-		return code
-	}
-
-	// --toon is the default; --json overrides it
-	if jsonOutput && toonOutput {
-		fmt.Fprintf(os.Stderr, "tq: --json and --toon are mutually exclusive\n")
-		return 2
-	}
-
-	// Determine the filter expression
-	filterExpr := "."
-	fileArgs := flag.Args()
-
-	if fromFile != "" {
-		data, err := os.ReadFile(fromFile)
+	if cfg.fromFile != "" {
+		data, err := os.ReadFile(cfg.fromFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-			return 2
+			return "", nil, exitUsage
 		}
 		filterExpr = string(data)
 	} else if len(fileArgs) > 0 {
@@ -118,18 +112,21 @@ Flags:
 	// When --stream is set, wrap the filter to decompose input into path-value pairs.
 	// The filter is parenthesized so compound expressions (e.g. "select(…) | …")
 	// work correctly. Top-level definitions like "def f: …; f" may not compose.
-	if stream {
+	if cfg.stream {
 		filterExpr = "tostream | (" + filterExpr + ")"
 	}
 
-	// Parse the jq filter
+	return filterExpr, fileArgs, exitOK
+}
+
+// compileFilter parses and compiles a jq filter with bound variables.
+func compileFilter(filterExpr string, args, argsJSON []keyValue) (*gojq.Code, []any, int) {
 	query, err := gojq.Parse(filterExpr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tq: parse error: %v\n", err)
-		return 3
+		return nil, nil, exitCompile
 	}
 
-	// Compile with variables
 	var compileOpts []gojq.CompilerOption
 	var varNames []string
 	var varValues []any
@@ -145,50 +142,89 @@ Flags:
 		compileOpts = append(compileOpts, gojq.WithVariables(varNames))
 	}
 
-	compiledCode, err := gojq.Compile(query, compileOpts...)
+	code, err := gojq.Compile(query, compileOpts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tq: compile error: %v\n", err)
-		return 3
+		return nil, nil, exitCompile
+	}
+	return code, varValues, exitOK
+}
+
+// resolveDelimiter maps a delimiter flag string to a toon.Delimiter.
+func resolveDelimiter(s string) (toon.Delimiter, int) {
+	switch strings.ToLower(s) {
+	case "tab":
+		return toon.DelimiterTab, exitOK
+	case "pipe":
+		return toon.DelimiterPipe, exitOK
+	case "comma", "":
+		return toon.DelimiterComma, exitOK
+	default:
+		fmt.Fprintf(os.Stderr, "tq: unknown delimiter %q (use comma, tab, or pipe)\n", s)
+		return 0, exitUsage
+	}
+}
+
+func run() int {
+	cfg, args := parseFlags()
+
+	if cfg.version {
+		fmt.Println("tq " + version)
+		return exitOK
 	}
 
-	// Resolve TOON delimiter
-	var toonDelimiter toon.Delimiter
-	switch strings.ToLower(delimiter) {
-	case "tab":
-		toonDelimiter = toon.DelimiterTab
-	case "pipe":
-		toonDelimiter = toon.DelimiterPipe
-	case "comma", "":
-		toonDelimiter = toon.DelimiterComma
-	default:
-		fmt.Fprintf(os.Stderr, "tq: unknown delimiter %q (use comma, tab, or pipe)\n", delimiter)
-		return 2
+	if cfg.jsonOutput && cfg.toonOutput {
+		fmt.Fprintf(os.Stderr, "tq: --json and --toon are mutually exclusive\n")
+		return exitUsage
+	}
+
+	argVars, rc := parseVarPairs(cfg.argPairs, "arg", false)
+	if rc != 0 {
+		return rc
+	}
+	argjsonVars, rc := parseVarPairs(cfg.argjsonPairs, "argjson", true)
+	if rc != 0 {
+		return rc
+	}
+
+	filterExpr, fileArgs, rc := resolveFilter(cfg, args)
+	if rc != 0 {
+		return rc
+	}
+
+	code, varValues, rc := compileFilter(filterExpr, argVars, argjsonVars)
+	if rc != 0 {
+		return rc
+	}
+
+	delim, rc := resolveDelimiter(cfg.delimiter)
+	if rc != 0 {
+		return rc
 	}
 
 	opts := output.Options{
-		JSON:      jsonOutput,
-		Raw:       rawOutput,
-		Compact:   compact,
-		Tab:       tab,
-		Indent:    indent,
-		Join:      joinOutput,
-		Delimiter: toonDelimiter,
+		JSON:      cfg.jsonOutput,
+		Raw:       cfg.rawOutput,
+		Compact:   cfg.compact,
+		Tab:       cfg.tab,
+		Indent:    cfg.indent,
+		Join:      cfg.joinOutput,
+		Delimiter: delim,
 	}
 
-	// Process input
 	hasOutput := false
-	exitCode := 0
+	var exitCode int
 
-	if nullInput {
-		exitCode = executeFilter(compiledCode, nil, varValues, opts, &hasOutput)
+	if cfg.nullInput {
+		exitCode = executeFilter(code, nil, varValues, opts, &hasOutput)
 	} else if len(fileArgs) > 0 {
-		exitCode = processFiles(fileArgs, compiledCode, varValues, opts, slurp, &hasOutput)
+		exitCode = processFiles(fileArgs, code, varValues, opts, cfg.slurp, &hasOutput)
 	} else {
-		exitCode = processStream(os.Stdin, compiledCode, varValues, opts, slurp, &hasOutput)
+		exitCode = processStream(os.Stdin, code, varValues, opts, cfg.slurp, &hasOutput)
 	}
 
-	if exitStatus && !hasOutput && exitCode == 0 {
-		return 4
+	if cfg.exitStatus && !hasOutput && exitCode == exitOK {
+		return exitNoOutput
 	}
 
 	return exitCode
@@ -224,7 +260,7 @@ func processFiles(files []string, code *gojq.Code, varValues []any, opts output.
 	exitCode := 0
 	for _, f := range files {
 		rc := filterFile(f, code, varValues, opts, hasOutput)
-		if rc == 2 {
+		if rc == exitUsage {
 			return rc
 		}
 		if rc != 0 {
@@ -262,7 +298,7 @@ func filterAll(r io.Reader, label string, code *gojq.Code, varValues []any, opts
 		v, ok, err := sr.Next()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tq: %s: %v\n", label, err)
-			return 2
+			return exitUsage
 		}
 		if !ok {
 			break
@@ -282,7 +318,7 @@ func slurpAll(r io.Reader, label string) ([]any, int) {
 		v, ok, err := sr.Next()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tq: %s: %v\n", label, err)
-			return nil, 2
+			return nil, exitUsage
 		}
 		if !ok {
 			break
@@ -300,7 +336,7 @@ func openFileReader(filename string) (io.Reader, func(), int) {
 	fh, err := os.Open(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-		return nil, nil, 2
+		return nil, nil, exitUsage
 	}
 	return fh, func() { fh.Close() }, 0
 }
@@ -322,15 +358,15 @@ func executeFilter(code *gojq.Code, inp any, varValues []any, opts output.Option
 		}
 		if err, isErr := v.(error); isErr {
 			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-			return 5
+			return exitRuntime
 		}
 		*hasOutput = true
 		if err := output.Write(os.Stdout, v, opts); err != nil {
 			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-			return 2
+			return exitUsage
 		}
 	}
-	return 0
+	return exitOK
 }
 
 // keyValue holds a --arg or --argjson pair.
@@ -344,7 +380,7 @@ type keyValue struct {
 func parseVarPairs(pairs []string, flagName string, parseJSON bool) ([]keyValue, int) {
 	if len(pairs)%2 != 0 {
 		fmt.Fprintf(os.Stderr, "tq: --%s requires pairs of name and value\n", flagName)
-		return nil, 2
+		return nil, exitUsage
 	}
 	var result []keyValue
 	for i := 0; i < len(pairs); i += 2 {
@@ -354,7 +390,7 @@ func parseVarPairs(pairs []string, flagName string, parseJSON bool) ([]keyValue,
 		if parseJSON {
 			if err := json.Unmarshal([]byte(rawValue), &value); err != nil {
 				fmt.Fprintf(os.Stderr, "tq: --%s value for %q is not valid JSON: %v\n", flagName, name, err)
-				return nil, 2
+				return nil, exitUsage
 			}
 		}
 		result = append(result, keyValue{name: name, value: value})
