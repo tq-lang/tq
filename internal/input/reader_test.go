@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestStreamReaderJSON_SingleDoc(t *testing.T) {
-	sr := NewStreamReader(strings.NewReader(`{"name":"Alice","age":30}`))
+func TestReaderJSON_SingleDoc(t *testing.T) {
+	sr := NewReader(strings.NewReader(`{"name":"Alice","age":30}`))
 
 	v, ok, err := sr.Next()
 	if err != nil {
@@ -29,9 +29,9 @@ func TestStreamReaderJSON_SingleDoc(t *testing.T) {
 	}
 }
 
-func TestStreamReaderJSON_MultiDoc(t *testing.T) {
+func TestReaderJSON_MultiDoc(t *testing.T) {
 	input := "{\"a\":1}\n{\"b\":2}\n{\"c\":3}"
-	sr := NewStreamReader(strings.NewReader(input))
+	sr := NewReader(strings.NewReader(input))
 
 	var results []map[string]any
 	for {
@@ -59,8 +59,8 @@ func TestStreamReaderJSON_MultiDoc(t *testing.T) {
 	}
 }
 
-func TestStreamReaderJSON_Concatenated(t *testing.T) {
-	sr := NewStreamReader(strings.NewReader(`{"a":1}{"b":2}`))
+func TestReaderJSON_Concatenated(t *testing.T) {
+	sr := NewReader(strings.NewReader(`{"a":1}{"b":2}`))
 
 	v1, ok, err := sr.Next()
 	if err != nil || !ok {
@@ -84,8 +84,8 @@ func TestStreamReaderJSON_Concatenated(t *testing.T) {
 	}
 }
 
-func TestStreamReaderTOON_SingleDoc(t *testing.T) {
-	sr := NewStreamReader(strings.NewReader("key: value\ncount: 42\n"))
+func TestReaderTOON_SingleDoc(t *testing.T) {
+	sr := NewReader(strings.NewReader("key: value\ncount: 42\n"))
 
 	v, ok, err := sr.Next()
 	if err != nil {
@@ -105,9 +105,9 @@ func TestStreamReaderTOON_SingleDoc(t *testing.T) {
 	}
 }
 
-func TestStreamReaderTOON_MultiDoc(t *testing.T) {
+func TestReaderTOON_MultiDoc(t *testing.T) {
 	input := "key: Alice\nage: 30\n\nkey: Bob\nage: 25\n"
-	sr := NewStreamReader(strings.NewReader(input))
+	sr := NewReader(strings.NewReader(input))
 
 	v1, ok, err := sr.Next()
 	if err != nil || !ok {
@@ -131,8 +131,8 @@ func TestStreamReaderTOON_MultiDoc(t *testing.T) {
 	}
 }
 
-func TestStreamReaderJSON_Keywords(t *testing.T) {
-	sr := NewStreamReader(strings.NewReader("true\nfalse\nnull\n"))
+func TestReaderJSON_Keywords(t *testing.T) {
+	sr := NewReader(strings.NewReader("true\nfalse\nnull\n"))
 
 	var vals []any
 	for {
@@ -160,8 +160,8 @@ func TestStreamReaderJSON_Keywords(t *testing.T) {
 	}
 }
 
-func TestStreamReaderEmpty(t *testing.T) {
-	sr := NewStreamReader(strings.NewReader(""))
+func TestReaderEmpty(t *testing.T) {
+	sr := NewReader(strings.NewReader(""))
 
 	_, ok, err := sr.Next()
 	if err != nil {
@@ -172,10 +172,10 @@ func TestStreamReaderEmpty(t *testing.T) {
 	}
 }
 
-func TestStreamReaderJSON_Fallback_TOON(t *testing.T) {
+func TestReaderJSON_Fallback_TOON(t *testing.T) {
 	// Input starts with 'n' which Detect classifies as JSON (for "null").
-	// StreamReader should fall back to TOON when json.Decode fails.
-	sr := NewStreamReader(strings.NewReader("name: Alice\nage: 30\n"))
+	// Reader should fall back to TOON when json.Decode fails.
+	sr := NewReader(strings.NewReader("name: Alice\nage: 30\n"))
 
 	v, ok, err := sr.Next()
 	if err != nil {
@@ -190,10 +190,10 @@ func TestStreamReaderJSON_Fallback_TOON(t *testing.T) {
 	}
 }
 
-func TestStreamReaderJSON_Fallback_TOON_MultiDoc(t *testing.T) {
+func TestReaderJSON_Fallback_TOON_MultiDoc(t *testing.T) {
 	// Multi-doc TOON starting with 'n' — tests fallback + continued streaming.
 	input := "name: Alice\nage: 30\n\nname: Bob\nage: 25\n"
-	sr := NewStreamReader(strings.NewReader(input))
+	sr := NewReader(strings.NewReader(input))
 
 	v1, ok, err := sr.Next()
 	if err != nil || !ok {

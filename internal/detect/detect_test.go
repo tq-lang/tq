@@ -29,7 +29,7 @@ func TestDetect(t *testing.T) {
 		{"toon starting with hash comment", []byte(`# comment`), TOON},
 
 		// Note: 'n' is a JSON starter (for null), so 'name: ...' is detected as JSON.
-		// This is expected — input.Parse handles the fallback from JSON to TOON.
+		// This is expected — input.Reader handles the fallback from JSON to TOON.
 		{"n-starting detected as json", []byte(`name: Alice`), JSON},
 
 		// Whitespace handling

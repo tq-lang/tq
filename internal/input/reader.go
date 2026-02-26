@@ -1,3 +1,4 @@
+// Package input parses TOON and JSON documents from io.Readers into dynamic Go values.
 package input
 
 import (
@@ -11,9 +12,9 @@ import (
 	"github.com/tq-lang/tq/internal/detect"
 )
 
-// StreamReader reads values from an io.Reader one at a time, supporting
-// streams of multiple concatenated JSON or TOON documents.
-type StreamReader struct {
+// Reader reads values from an io.Reader one at a time, supporting
+// multiple concatenated JSON or TOON documents.
+type Reader struct {
 	format     detect.Format
 	jsonDec    *json.Decoder  // used for JSON streams
 	scanner    *bufio.Scanner // used for TOON streams
@@ -24,13 +25,13 @@ type StreamReader struct {
 	firstRead  bool          // true until first successful JSON decode
 }
 
-// NewStreamReader creates a reader that yields parsed values from a stream.
+// NewReader creates a reader that yields parsed values one at a time.
 // The format is auto-detected by peeking at the first non-whitespace byte.
-func NewStreamReader(r io.Reader) *StreamReader {
+func NewReader(r io.Reader) *Reader {
 	br := bufio.NewReader(r)
 	format := detect.DetectReader(br)
 
-	sr := &StreamReader{
+	sr := &Reader{
 		format:     format,
 		underlying: br,
 		firstRead:  true,
@@ -53,7 +54,7 @@ func NewStreamReader(r io.Reader) *StreamReader {
 // Next returns the next parsed value from the stream.
 // Returns (value, true, nil) for each value, (nil, false, nil) at EOF,
 // or (nil, false, err) on parse error.
-func (sr *StreamReader) Next() (any, bool, error) {
+func (sr *Reader) Next() (any, bool, error) {
 	if sr.done {
 		return nil, false, nil
 	}
@@ -64,7 +65,7 @@ func (sr *StreamReader) Next() (any, bool, error) {
 	return sr.nextTOON()
 }
 
-func (sr *StreamReader) nextJSON() (any, bool, error) {
+func (sr *Reader) nextJSON() (any, bool, error) {
 	// Use Decode directly instead of More() — More() is designed for values
 	// inside JSON arrays/objects, not top-level concatenated streams where
 	// buffer-boundary splits could cause premature EOF detection.
@@ -99,7 +100,7 @@ func (sr *StreamReader) nextJSON() (any, bool, error) {
 
 // fallbackToTOON switches from JSON mode to TOON mode, reconstructing
 // the full stream from captured bytes and the remaining underlying reader.
-func (sr *StreamReader) fallbackToTOON() {
+func (sr *Reader) fallbackToTOON() {
 	reconstructed := io.MultiReader(
 		bytes.NewReader(sr.captured.Bytes()),
 		sr.underlying,
@@ -110,7 +111,7 @@ func (sr *StreamReader) fallbackToTOON() {
 	sr.captured = nil
 }
 
-func (sr *StreamReader) nextTOON() (any, bool, error) {
+func (sr *Reader) nextTOON() (any, bool, error) {
 	// Accumulate lines until we hit a blank line (document separator) or EOF.
 	// A blank line between non-empty content separates documents.
 	// Note: only truly empty lines ("") act as separators; lines containing
@@ -148,7 +149,7 @@ func (sr *StreamReader) nextTOON() (any, bool, error) {
 	return sr.decodeTOONBuffer()
 }
 
-func (sr *StreamReader) decodeTOONBuffer() (any, bool, error) {
+func (sr *Reader) decodeTOONBuffer() (any, bool, error) {
 	data := sr.buf.Bytes()
 	v, err := toon.Decode(data)
 	if err != nil {
