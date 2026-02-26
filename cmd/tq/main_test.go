@@ -10,6 +10,8 @@ import (
 
 var binaryPath string
 
+var coverDir string
+
 func TestMain(m *testing.M) {
 	tmp, err := os.MkdirTemp("", "tq-test-*")
 	if err != nil {
@@ -18,7 +20,21 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(tmp)
 
 	binaryPath = filepath.Join(tmp, "tq")
-	cmd := exec.Command("go", "build", "-o", binaryPath, ".")
+	buildArgs := []string{"build", "-o", binaryPath}
+
+	// Build with coverage instrumentation when GOCOVERDIR is set,
+	// so CLI integration tests contribute to coverage reports.
+	if dir := os.Getenv("GOCOVERDIR"); dir != "" {
+		absDir, absErr := filepath.Abs(dir)
+		if absErr != nil {
+			panic("bad GOCOVERDIR: " + absErr.Error())
+		}
+		coverDir = absDir
+		buildArgs = append(buildArgs, "-cover")
+	}
+
+	buildArgs = append(buildArgs, ".")
+	cmd := exec.Command("go", buildArgs...)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		panic("failed to build tq: " + err.Error())
@@ -31,6 +47,9 @@ func runTQ(t *testing.T, stdin string, args ...string) (stdout, stderr string, e
 	t.Helper()
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Stdin = strings.NewReader(stdin)
+	if coverDir != "" {
+		cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
+	}
 	var outBuf, errBuf strings.Builder
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf

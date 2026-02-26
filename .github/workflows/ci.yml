@@ -22,8 +22,20 @@ jobs:
       - name: Build
         run: go build ./cmd/tq
 
-      - name: Test
-        run: go test -v ./...
+      - name: Test libraries with coverage
+        run: go test -v -coverprofile=lib.out ./internal/...
+
+      - name: Test CLI with integration coverage
+        run: |
+          mkdir -p .coverdata
+          GOCOVERDIR=$(pwd)/.coverdata go test -v -count=1 ./cmd/tq
+
+      - name: Coverage report
+        run: |
+          echo "### Library coverage"
+          go tool cover -func=lib.out | tail -1
+          echo "### CLI integration coverage"
+          go tool covdata percent -i=.coverdata
 
   lint:
     runs-on: ubuntu-latest
