@@ -133,7 +133,9 @@ func TestCLIWithFiles(t *testing.T) {
 
 	t.Run("file input", func(t *testing.T) {
 		f := filepath.Join(tmp, "input.json")
-		os.WriteFile(f, []byte(`{"x":42}`), 0644)
+		if err := os.WriteFile(f, []byte(`{"x":42}`), 0644); err != nil {
+			t.Fatal(err)
+		}
 		stdout, _, code := runTQ(t, "", ".x", f)
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0", code)
@@ -145,7 +147,9 @@ func TestCLIWithFiles(t *testing.T) {
 
 	t.Run("from-file filter", func(t *testing.T) {
 		f := filepath.Join(tmp, "filter.jq")
-		os.WriteFile(f, []byte(".name"), 0644)
+		if err := os.WriteFile(f, []byte(".name"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		stdout, _, code := runTQ(t, `{"name":"Bob"}`, "-f", f)
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0", code)
@@ -158,8 +162,12 @@ func TestCLIWithFiles(t *testing.T) {
 	t.Run("multiple files", func(t *testing.T) {
 		f1 := filepath.Join(tmp, "a.json")
 		f2 := filepath.Join(tmp, "b.json")
-		os.WriteFile(f1, []byte(`{"v":1}`), 0644)
-		os.WriteFile(f2, []byte(`{"v":2}`), 0644)
+		if err := os.WriteFile(f1, []byte(`{"v":1}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f2, []byte(`{"v":2}`), 0644); err != nil {
+			t.Fatal(err)
+		}
 		stdout, _, code := runTQ(t, "", ".v", f1, f2)
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0", code)

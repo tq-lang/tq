@@ -3,7 +3,11 @@
 ## 2026-02-26
 
 ### Features
+- add PNG versions of project logo assets (2c9f523)
 - add project logo assets in SVG format (250a9f2)
+
+### Tests
+- add table-driven test suite for all packages (#1) (4fb6a3c)
 
 ## 2026-02-19
 
