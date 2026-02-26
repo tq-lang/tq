@@ -6,6 +6,12 @@
 - add PNG versions of project logo assets (2c9f523)
 - add project logo assets in SVG format (250a9f2)
 
+### Fixes
+- check os.WriteFile error returns for errcheck lint (6984240)
+
+### Refactor
+- replace flag with pflag and improve CLI UX (fad9cb6)
+
 ### Tests
 - add table-driven test suite for all packages (#1) (4fb6a3c)
 

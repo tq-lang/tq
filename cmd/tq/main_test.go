@@ -104,7 +104,17 @@ func TestCLI(t *testing.T) {
 		{"empty array", `[]`, []string{"--json", "-c", "."}, 0, "[]", ""},
 		{"null value", `null`, []string{"--json", "-c", "."}, 0, "null", ""},
 
+		// --toon flag (explicit default)
+		{"toon flag", `{"a":1}`, []string{"--toon", "."}, 0, "a", ""},
+
+		// Stdin marker
+		// Note: stdin marker "-" tested separately in TestCLIWithFiles
+
+		// Combined short flags
+		{"combined short flags", `{"name":"Alice"}`, []string{"-rc", ".name"}, 0, "Alice", ""},
+
 		// Errors
+		{"json and toon conflict", `{}`, []string{"--json", "--toon", "."}, 2, "", "mutually exclusive"},
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},
 		{"runtime error", `42`, []string{".foo"}, 5, "", "expected an object"},
 		{"file not found", "", []string{".", "/nonexistent/file.json"}, 2, "", "no such file"},
@@ -156,6 +166,16 @@ func TestCLIWithFiles(t *testing.T) {
 		}
 		if !strings.Contains(stdout, "Bob") {
 			t.Errorf("got %q, want Bob", stdout)
+		}
+	})
+
+	t.Run("stdin marker", func(t *testing.T) {
+		stdout, _, code := runTQ(t, `{"x":99}`, ".x", "-")
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0", code)
+		}
+		if !strings.Contains(stdout, "99") {
+			t.Errorf("got %q, want 99", stdout)
 		}
 	})
 

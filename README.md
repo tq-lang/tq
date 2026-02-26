@@ -62,11 +62,14 @@ tq reads TOON or JSON from stdin (or files), applies a jq filter, and writes the
 
 Input format is auto-detected. Output is TOON by default; use `--json` for JSON output.
 
+Use `-` as a file argument to read from stdin explicitly (e.g. `tq '.key' -`).
+
 ### Flags
 
 | Flag | Description |
 |------|-------------|
 | `--json` | Output JSON instead of TOON |
+| `--toon` | Output TOON (default, explicit for scripts) |
 | `-r`, `--raw-output` | Output raw strings (no quotes) |
 | `-c`, `--compact-output` | Compact output |
 | `-s`, `--slurp` | Read all inputs into an array |
@@ -80,6 +83,9 @@ Input format is auto-detected. Output is TOON by default; use `--json` for JSON 
 | `--argjson name value` | Pass a JSON variable to the filter |
 | `-f`, `--from-file` | Read filter from file |
 | `--version` | Print version |
+| `-h`, `--help` | Show help with examples |
+
+Short flags can be combined: `-rc` is equivalent to `-r -c`.
 
 ### Filter language
 
