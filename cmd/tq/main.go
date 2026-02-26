@@ -23,20 +23,20 @@ func main() {
 
 func run() int {
 	var (
-		jsonOutput bool
-		toonOutput bool
-		rawOutput  bool
-		compact    bool
-		slurp      bool
-		nullInput  bool
-		joinOutput bool
-		tab        bool
-		indent     int
-		exitStatus bool
-		delimiter  string
-		fromFile   string
-		showVersion bool
-		argPairs    []string
+		jsonOutput   bool
+		toonOutput   bool
+		rawOutput    bool
+		compact      bool
+		slurp        bool
+		nullInput    bool
+		joinOutput   bool
+		tab          bool
+		indent       int
+		exitStatus   bool
+		delimiter    string
+		fromFile     string
+		showVersion  bool
+		argPairs     []string
 		argjsonPairs []string
 	)
 
