@@ -1,7 +1,9 @@
+VERSION ?= dev
+
 .PHONY: build test lint check cover clean
 
 build:
-	go build -o tq ./cmd/tq
+	go build -ldflags "-X main.version=$(VERSION)" -o tq ./cmd/tq
 
 test:
 	go test -v ./...

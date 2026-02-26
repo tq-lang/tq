@@ -41,6 +41,13 @@ echo '{"users":[{"id":1,"name":"Alice","active":true},{"id":2,"name":"Bob","acti
 go install github.com/tq-lang/tq/cmd/tq@latest
 ```
 
+### Build from repo
+
+```bash
+make build                    # builds ./tq with version "dev"
+make build VERSION=1.2.3      # builds ./tq with custom version
+```
+
 ### From releases
 
 Download a prebuilt binary from the [Releases](https://github.com/tq-lang/tq/releases) page.
