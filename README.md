@@ -79,6 +79,7 @@ Use `-` as a file argument to read from stdin explicitly (e.g. `tq '.key' -`).
 | `--tab` | Use tab indentation |
 | `--indent N` | Set indentation width |
 | `--delimiter` | TOON output delimiter: `comma`, `tab`, `pipe` |
+| `--stream` | Output path-value pairs for streaming |
 | `--arg name value` | Pass a string variable to the filter |
 | `--argjson name value` | Pass a JSON variable to the filter |
 | `-f`, `--from-file` | Read filter from file |
@@ -120,6 +121,41 @@ tq '{name: .user.name, email: .user.email}'
 # And everything else jq supports...
 ```
 
+### Streaming
+
+tq supports streaming input, matching jq's behavior for multi-document streams:
+
+```bash
+# Process a stream of multiple JSON values from stdin
+echo '{"a":1}
+{"b":2}
+{"c":3}' | tq '.a // .b // .c'
+# 1
+# 2
+# 3
+
+# Stream of TOON documents (separated by blank lines)
+printf 'name: Alice\nage: 30\n\nname: Bob\nage: 25\n' | tq '.name'
+# Alice
+# Bob
+
+# Decompose a document into path-value pairs with --stream
+echo '{"a":1,"b":[2,3]}' | tq --stream --json '.'
+# [["a"],1]
+# [["b",0],2]
+# [["b",1],3]
+# ...
+
+# Filter streamed path-value pairs
+echo '{"a":1,"b":2}' | tq --stream --json 'select(.[0][0] == "a")'
+# [["a"],1]
+
+# Slurp a stream of values into an array
+echo '{"a":1}
+{"b":2}' | tq -s 'length'
+# 2
+```
+
 ## Why tq?
 
 TOON is designed for LLM workflows where every token counts. tq lets you work with TOON data using the query language you already know from jq — no new syntax to learn.
@@ -140,7 +176,7 @@ cat data.toon | tq --json '.'
 - [x] Auto-detect TOON/JSON input
 - [x] TOON and JSON output
 - [x] File and stdin input
-- [ ] Streaming mode for large files
+- [x] Streaming mode for large files
 - [ ] Shell completions (bash, zsh, fish)
 - [ ] Homebrew formula
 - [ ] TOON-specific query extensions

@@ -33,6 +33,7 @@ func run() int {
 		tab          bool
 		indent       int
 		exitStatus   bool
+		stream       bool
 		delimiter    string
 		fromFile     string
 		showVersion  bool
@@ -50,6 +51,7 @@ func run() int {
 	flag.BoolVar(&tab, "tab", false, "use tab for indentation")
 	flag.IntVar(&indent, "indent", 0, "number of spaces for indentation")
 	flag.BoolVarP(&exitStatus, "exit-status", "e", false, "set exit code based on output")
+	flag.BoolVar(&stream, "stream", false, "output path-value pairs for streaming")
 	flag.StringVar(&delimiter, "delimiter", "", "TOON output delimiter: comma, tab, pipe")
 	flag.StringVarP(&fromFile, "from-file", "f", "", "read filter from file")
 	flag.BoolVar(&showVersion, "version", false, "print version")
@@ -113,6 +115,13 @@ Flags:
 		fileArgs = fileArgs[1:]
 	}
 
+	// When --stream is set, wrap the filter to decompose input into path-value pairs.
+	// The filter is parenthesized so compound expressions (e.g. "select(…) | …")
+	// work correctly. Top-level definitions like "def f: …; f" may not compose.
+	if stream {
+		filterExpr = "tostream | (" + filterExpr + ")"
+	}
+
 	// Parse the jq filter
 	query, err := gojq.Parse(filterExpr)
 	if err != nil {
@@ -166,84 +175,175 @@ Flags:
 		Delimiter: toonDelimiter,
 	}
 
-	// Read input
-	var inputs []any
-	if nullInput {
-		inputs = []any{nil}
-	} else if len(fileArgs) > 0 {
-		for _, f := range fileArgs {
-			if f == "-" {
-				v, readErr := readStdin()
-				if readErr != nil {
-					fmt.Fprintf(os.Stderr, "tq: reading stdin: %v\n", readErr)
-					return 2
-				}
-				inputs = append(inputs, v)
-				continue
-			}
-			data, readErr := os.ReadFile(f)
-			if readErr != nil {
-				fmt.Fprintf(os.Stderr, "tq: %v\n", readErr)
-				return 2
-			}
-			v, parseErr := input.Parse(data)
-			if parseErr != nil {
-				fmt.Fprintf(os.Stderr, "tq: %s: %v\n", f, parseErr)
-				return 2
-			}
-			inputs = append(inputs, v)
-		}
-	} else {
-		v, readErr := readStdin()
-		if readErr != nil {
-			fmt.Fprintf(os.Stderr, "tq: reading stdin: %v\n", readErr)
-			return 2
-		}
-		inputs = append(inputs, v)
-	}
-
-	if slurp {
-		inputs = []any{inputs}
-	}
-
-	// Execute filter and write output
+	// Process input
 	hasOutput := false
 	exitCode := 0
-	for _, inp := range inputs {
-		iter := compiledCode.Run(inp, varValues...)
-		for {
-			v, ok := iter.Next()
-			if !ok {
-				break
-			}
-			if err, isErr := v.(error); isErr {
-				fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-				exitCode = 5
-				break
-			}
-			hasOutput = true
-			if err := output.Write(os.Stdout, v, opts); err != nil {
-				fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-				return 2
-			}
-		}
+
+	if nullInput {
+		exitCode = executeFilter(compiledCode, nil, varValues, opts, &hasOutput)
+	} else if len(fileArgs) > 0 {
+		exitCode = processFiles(fileArgs, compiledCode, varValues, opts, slurp, &hasOutput)
+	} else {
+		exitCode = processStream(os.Stdin, compiledCode, varValues, opts, slurp, &hasOutput)
 	}
 
-	if exitStatus {
-		if !hasOutput {
-			return 4
-		}
+	if exitStatus && !hasOutput && exitCode == 0 {
+		return 4
 	}
 
 	return exitCode
 }
 
-func readStdin() (any, error) {
-	data, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, err
+// processStream reads values from a stream and executes the filter on each.
+// With slurp, all values are collected into an array before filtering.
+func processStream(r io.Reader, code *gojq.Code, varValues []any, opts output.Options, slurp bool, hasOutput *bool) int {
+	sr := input.NewStreamReader(r)
+
+	if slurp {
+		var all []any
+		for {
+			v, ok, err := sr.Next()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "tq: %v\n", err)
+				return 2
+			}
+			if !ok {
+				break
+			}
+			all = append(all, v)
+		}
+		return executeFilter(code, all, varValues, opts, hasOutput)
 	}
-	return input.Parse(data)
+
+	exitCode := 0
+	for {
+		v, ok, err := sr.Next()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
+			return 2
+		}
+		if !ok {
+			break
+		}
+		if rc := executeFilter(code, v, varValues, opts, hasOutput); rc != 0 {
+			exitCode = rc
+		}
+	}
+	return exitCode
+}
+
+// processFiles reads each file (or "-" for stdin) as a streaming source.
+func processFiles(files []string, code *gojq.Code, varValues []any, opts output.Options, slurp bool, hasOutput *bool) int {
+	if slurp {
+		var all []any
+		for _, f := range files {
+			vals, rc := collectFile(f)
+			if rc != 0 {
+				return rc
+			}
+			all = append(all, vals...)
+		}
+		return executeFilter(code, all, varValues, opts, hasOutput)
+	}
+
+	exitCode := 0
+	for _, f := range files {
+		rc := func() int {
+			r, cleanup, openRC := openFileReader(f)
+			if openRC != 0 {
+				return openRC
+			}
+			defer cleanup()
+			ec := 0
+			sr := input.NewStreamReader(r)
+			for {
+				v, ok, err := sr.Next()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "tq: %s: %v\n", fileLabel(f), err)
+					return 2
+				}
+				if !ok {
+					break
+				}
+				if rc := executeFilter(code, v, varValues, opts, hasOutput); rc != 0 {
+					ec = rc
+				}
+			}
+			return ec
+		}()
+		if rc == 2 {
+			return rc
+		}
+		if rc != 0 {
+			exitCode = rc
+		}
+	}
+	return exitCode
+}
+
+// collectFile reads all values from a file into a slice (for slurp mode).
+func collectFile(filename string) ([]any, int) {
+	r, cleanup, rc := openFileReader(filename)
+	if rc != 0 {
+		return nil, rc
+	}
+	defer cleanup()
+
+	sr := input.NewStreamReader(r)
+	var vals []any
+	for {
+		v, ok, err := sr.Next()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tq: %s: %v\n", fileLabel(filename), err)
+			return nil, 2
+		}
+		if !ok {
+			break
+		}
+		vals = append(vals, v)
+	}
+	return vals, 0
+}
+
+// openFileReader opens a file or stdin ("-") and returns a reader and cleanup func.
+func openFileReader(filename string) (io.Reader, func(), int) {
+	if filename == "-" {
+		return os.Stdin, func() {}, 0
+	}
+	fh, err := os.Open(filename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tq: %v\n", err)
+		return nil, nil, 2
+	}
+	return fh, func() { fh.Close() }, 0
+}
+
+func fileLabel(filename string) string {
+	if filename == "-" {
+		return "stdin"
+	}
+	return filename
+}
+
+// executeFilter runs the compiled filter on a single input and writes results.
+func executeFilter(code *gojq.Code, inp any, varValues []any, opts output.Options, hasOutput *bool) int {
+	iter := code.Run(inp, varValues...)
+	for {
+		v, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err, isErr := v.(error); isErr {
+			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
+			return 5
+		}
+		*hasOutput = true
+		if err := output.Write(os.Stdout, v, opts); err != nil {
+			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
+			return 2
+		}
+	}
+	return 0
 }
 
 // keyValue holds a --arg or --argjson pair.

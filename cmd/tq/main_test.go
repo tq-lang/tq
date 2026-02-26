@@ -104,6 +104,16 @@ func TestCLI(t *testing.T) {
 		{"empty array", `[]`, []string{"--json", "-c", "."}, 0, "[]", ""},
 		{"null value", `null`, []string{"--json", "-c", "."}, 0, "null", ""},
 
+		// Streaming — multi-document input
+		{"multi-doc json first", "{\"a\":1}\n{\"b\":2}", []string{"--json", "-c", "."}, 0, "{\"a\":1}", ""},
+		{"multi-doc json second", "{\"a\":1}\n{\"b\":2}", []string{"--json", "-c", "."}, 0, "{\"b\":2}", ""},
+		{"multi-doc toon", "key: Alice\nage: 30\n\nkey: Bob\nage: 25", []string{".key"}, 0, "Bob", ""},
+		{"slurp multi-doc", "{\"a\":1}\n{\"b\":2}", []string{"--json", "-c", "-s", "length"}, 0, "2", ""},
+
+		// --stream flag
+		{"stream flag", `{"a":1,"b":2}`, []string{"--stream", "--json", "-c", "."}, 0, `[["a"],1]`, ""},
+		{"stream with filter", `{"a":1,"b":2}`, []string{"--stream", "--json", "-c", `select(.[0][0] == "a")`}, 0, `[["a"],1]`, ""},
+
 		// Errors
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},
 		{"runtime error", `42`, []string{".foo"}, 5, "", "expected an object"},
@@ -174,6 +184,20 @@ func TestCLIWithFiles(t *testing.T) {
 		}
 		if !strings.Contains(stdout, "1") || !strings.Contains(stdout, "2") {
 			t.Errorf("got %q, want both values", stdout)
+		}
+	})
+
+	t.Run("multi-doc file", func(t *testing.T) {
+		f := filepath.Join(tmp, "multi.json")
+		if err := os.WriteFile(f, []byte("{\"a\":1}\n{\"b\":2}\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		stdout, _, code := runTQ(t, "", "--json", "-c", ".", f)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0", code)
+		}
+		if !strings.Contains(stdout, `{"a":1}`) || !strings.Contains(stdout, `{"b":2}`) {
+			t.Errorf("got %q, want both docs", stdout)
 		}
 	})
 }

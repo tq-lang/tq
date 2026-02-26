@@ -1,6 +1,8 @@
 // Package detect provides input format auto-detection for TOON and JSON.
 package detect
 
+import "bufio"
+
 // Format represents a supported input format.
 type Format int
 
@@ -26,4 +28,11 @@ func Detect(data []byte) Format {
 		}
 	}
 	return TOON
+}
+
+// DetectReader peeks at the buffered reader to determine format without
+// consuming any bytes. Uses the same heuristic as Detect.
+func DetectReader(r *bufio.Reader) Format {
+	buf, _ := r.Peek(4096)
+	return Detect(buf)
 }

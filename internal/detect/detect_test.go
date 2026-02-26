@@ -1,6 +1,10 @@
 package detect
 
-import "testing"
+import (
+	"bufio"
+	"strings"
+	"testing"
+)
 
 func TestDetect(t *testing.T) {
 	tests := []struct {
@@ -45,6 +49,37 @@ func TestDetect(t *testing.T) {
 			got := Detect(tt.input)
 			if got != tt.expect {
 				t.Errorf("Detect(%q) = %d, want %d", tt.input, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestDetectReader(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		expect Format
+	}{
+		{"json object", `{"a":1}`, JSON},
+		{"json array", `[1,2]`, JSON},
+		{"json string", `"hello"`, JSON},
+		{"json true", `true`, JSON},
+		{"json false", `false`, JSON},
+		{"json null", `null`, JSON},
+		{"json number", `42`, JSON},
+		{"toon key", `key: value`, TOON},
+		{"toon uppercase", `Name: Alice`, TOON},
+		// Same as Detect: 'n' triggers JSON detection; StreamReader handles fallback.
+		{"n-starting detected as json", `name: Alice`, JSON},
+		{"empty", ``, TOON},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := bufio.NewReader(strings.NewReader(tt.input))
+			got := DetectReader(r)
+			if got != tt.expect {
+				t.Errorf("DetectReader(%q) = %d, want %d", tt.input, got, tt.expect)
 			}
 		})
 	}
