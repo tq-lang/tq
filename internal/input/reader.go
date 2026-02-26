@@ -1,4 +1,7 @@
 // Package input parses TOON and JSON documents from io.Readers into dynamic Go values.
+//
+// Currently a single file. If the package grows, the JSON and TOON decoding
+// paths (nextJSON/nextTOON) are natural split points into separate files.
 package input
 
 import (
