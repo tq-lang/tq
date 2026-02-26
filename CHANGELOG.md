@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-02-26
+
+### Features
+- add project logo assets in SVG format (250a9f2)
+
 ## 2026-02-19
 
 ### Features
