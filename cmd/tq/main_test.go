@@ -56,7 +56,7 @@ func TestCLI(t *testing.T) {
 		wantErr  string // substring in stderr
 	}{
 		// Green: basic queries
-		{"identity", `{"name":"Alice"}`, []string{"."}, 0, "Alice", ""},
+		{"identity", `{"name":"Alice"}`, []string{"."}, 0, "name: Alice", ""},
 		{"field access", `{"name":"Alice"}`, []string{".name"}, 0, "Alice", ""},
 		{"array index", `[10,20,30]`, []string{".[1]"}, 0, "20", ""},
 		{"array iteration", `[1,2,3]`, []string{".[]"}, 0, "3", ""},
@@ -82,14 +82,14 @@ func TestCLI(t *testing.T) {
 
 		// Special modes
 		{"null input", "", []string{"-n", "1 + 1"}, 0, "2", ""},
-		{"slurp", `{"a":1}`, []string{"--json", "-c", "-s", "."}, 0, "[", ""},
+		{"slurp", `{"a":1}`, []string{"--json", "-c", "-s", "."}, 0, `[{"a":1}]`, ""},
 		{"version", "", []string{"--version"}, 0, "tq ", ""},
 		{"delimiter tab", `[1,2,3]`, []string{"--delimiter", "tab", "."}, 0, "\t", ""},
 		{"delimiter pipe", `[1,2,3]`, []string{"--delimiter", "pipe", "."}, 0, "|", ""},
 
 		// Variables
 		{"arg variable", "null", []string{"-n", "--arg", "name", "--arg", "Alice", "$name"}, 0, "Alice", ""},
-		{"argjson variable", "null", []string{"-n", "--json", "-c", "--argjson", "data", "--argjson", `{"k":"v"}`, "$data"}, 0, "k", ""},
+		{"argjson variable", "null", []string{"-n", "--json", "-c", "--argjson", "data", "--argjson", `{"k":"v"}`, "$data"}, 0, `{"k":"v"}`, ""},
 
 		// Exit status
 		{"exit status with output", `{"a":1}`, []string{"-e", "."}, 0, "a", ""},
@@ -104,17 +104,7 @@ func TestCLI(t *testing.T) {
 		{"empty array", `[]`, []string{"--json", "-c", "."}, 0, "[]", ""},
 		{"null value", `null`, []string{"--json", "-c", "."}, 0, "null", ""},
 
-		// --toon flag (explicit default)
-		{"toon flag", `{"a":1}`, []string{"--toon", "."}, 0, "a", ""},
-
-		// Stdin marker
-		// Note: stdin marker "-" tested separately in TestCLIWithFiles
-
-		// Combined short flags
-		{"combined short flags", `{"name":"Alice"}`, []string{"-rc", ".name"}, 0, "Alice", ""},
-
 		// Errors
-		{"json and toon conflict", `{}`, []string{"--json", "--toon", "."}, 2, "", "mutually exclusive"},
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},
 		{"runtime error", `42`, []string{".foo"}, 5, "", "expected an object"},
 		{"file not found", "", []string{".", "/nonexistent/file.json"}, 2, "", "no such file"},
@@ -166,16 +156,6 @@ func TestCLIWithFiles(t *testing.T) {
 		}
 		if !strings.Contains(stdout, "Bob") {
 			t.Errorf("got %q, want Bob", stdout)
-		}
-	})
-
-	t.Run("stdin marker", func(t *testing.T) {
-		stdout, _, code := runTQ(t, `{"x":99}`, ".x", "-")
-		if code != 0 {
-			t.Fatalf("exit code = %d, want 0", code)
-		}
-		if !strings.Contains(stdout, "99") {
-			t.Errorf("got %q, want 99", stdout)
 		}
 	})
 

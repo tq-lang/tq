@@ -23,7 +23,7 @@ jobs:
         run: go build ./cmd/tq
 
       - name: Test
-        run: go test ./...
+        run: go test -v ./...
 
   lint:
     runs-on: ubuntu-latest
