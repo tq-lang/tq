@@ -5,5 +5,8 @@
 ### Features
 - implement tq CLI with full jq filter support (b63b08e)
 
+### Fixes
+- pin Go version to 1.24 for golangci-lint compatibility (693cd08)
+
 ### Docs
 - add comprehensive README and Go build configuration (8ca0e16)
