@@ -197,29 +197,71 @@ Flags:
 // processStream reads values from a stream and executes the filter on each.
 // With slurp, all values are collected into an array before filtering.
 func processStream(r io.Reader, code *gojq.Code, varValues []any, opts output.Options, slurp bool, hasOutput *bool) int {
-	sr := input.NewStreamReader(r)
+	if slurp {
+		vals, rc := slurpAll(r, "stdin")
+		if rc != 0 {
+			return rc
+		}
+		return executeFilter(code, vals, varValues, opts, hasOutput)
+	}
+	return filterAll(r, "stdin", code, varValues, opts, hasOutput)
+}
 
+// processFiles reads each file (or "-" for stdin) as a streaming source.
+func processFiles(files []string, code *gojq.Code, varValues []any, opts output.Options, slurp bool, hasOutput *bool) int {
 	if slurp {
 		var all []any
-		for {
-			v, ok, err := sr.Next()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "tq: %v\n", err)
-				return 2
+		for _, f := range files {
+			vals, rc := slurpFile(f)
+			if rc != 0 {
+				return rc
 			}
-			if !ok {
-				break
-			}
-			all = append(all, v)
+			all = append(all, vals...)
 		}
 		return executeFilter(code, all, varValues, opts, hasOutput)
 	}
 
 	exitCode := 0
+	for _, f := range files {
+		rc := filterFile(f, code, varValues, opts, hasOutput)
+		if rc == 2 {
+			return rc
+		}
+		if rc != 0 {
+			exitCode = rc
+		}
+	}
+	return exitCode
+}
+
+// filterFile opens a single file, runs the filter on each value, and closes it.
+func filterFile(filename string, code *gojq.Code, varValues []any, opts output.Options, hasOutput *bool) int {
+	r, cleanup, rc := openFileReader(filename)
+	if rc != 0 {
+		return rc
+	}
+	defer cleanup()
+	return filterAll(r, fileLabel(filename), code, varValues, opts, hasOutput)
+}
+
+// slurpFile reads all values from a single file into a slice.
+func slurpFile(filename string) ([]any, int) {
+	r, cleanup, rc := openFileReader(filename)
+	if rc != 0 {
+		return nil, rc
+	}
+	defer cleanup()
+	return slurpAll(r, fileLabel(filename))
+}
+
+// filterAll reads values from r and runs the filter on each.
+func filterAll(r io.Reader, label string, code *gojq.Code, varValues []any, opts output.Options, hasOutput *bool) int {
+	sr := input.NewReader(r)
+	exitCode := 0
 	for {
 		v, ok, err := sr.Next()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "tq: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tq: %s: %v\n", label, err)
 			return 2
 		}
 		if !ok {
@@ -232,69 +274,14 @@ func processStream(r io.Reader, code *gojq.Code, varValues []any, opts output.Op
 	return exitCode
 }
 
-// processFiles reads each file (or "-" for stdin) as a streaming source.
-func processFiles(files []string, code *gojq.Code, varValues []any, opts output.Options, slurp bool, hasOutput *bool) int {
-	if slurp {
-		var all []any
-		for _, f := range files {
-			vals, rc := collectFile(f)
-			if rc != 0 {
-				return rc
-			}
-			all = append(all, vals...)
-		}
-		return executeFilter(code, all, varValues, opts, hasOutput)
-	}
-
-	exitCode := 0
-	for _, f := range files {
-		rc := func() int {
-			r, cleanup, openRC := openFileReader(f)
-			if openRC != 0 {
-				return openRC
-			}
-			defer cleanup()
-			ec := 0
-			sr := input.NewStreamReader(r)
-			for {
-				v, ok, err := sr.Next()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "tq: %s: %v\n", fileLabel(f), err)
-					return 2
-				}
-				if !ok {
-					break
-				}
-				if rc := executeFilter(code, v, varValues, opts, hasOutput); rc != 0 {
-					ec = rc
-				}
-			}
-			return ec
-		}()
-		if rc == 2 {
-			return rc
-		}
-		if rc != 0 {
-			exitCode = rc
-		}
-	}
-	return exitCode
-}
-
-// collectFile reads all values from a file into a slice (for slurp mode).
-func collectFile(filename string) ([]any, int) {
-	r, cleanup, rc := openFileReader(filename)
-	if rc != 0 {
-		return nil, rc
-	}
-	defer cleanup()
-
-	sr := input.NewStreamReader(r)
+// slurpAll reads all values from r into a slice.
+func slurpAll(r io.Reader, label string) ([]any, int) {
+	sr := input.NewReader(r)
 	var vals []any
 	for {
 		v, ok, err := sr.Next()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "tq: %s: %v\n", fileLabel(filename), err)
+			fmt.Fprintf(os.Stderr, "tq: %s: %v\n", label, err)
 			return nil, 2
 		}
 		if !ok {
