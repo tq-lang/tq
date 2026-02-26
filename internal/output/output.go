@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/toon-format/toon-go"
 )
@@ -40,43 +41,32 @@ func Write(w io.Writer, v any, opts Options) error {
 }
 
 func writeJSON(w io.Writer, v any, opts Options) error {
+	var data []byte
+	var err error
+
 	if opts.Compact {
-		data, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		_, err = w.Write(data)
-		if err != nil {
-			return err
-		}
-		if !opts.Join {
-			_, err = fmt.Fprintln(w)
-		}
+		data, err = json.Marshal(v)
+	} else {
+		data, err = json.MarshalIndent(v, "", indentString(opts))
+	}
+	if err != nil {
 		return err
 	}
 
-	indent := "  "
+	if _, err = w.Write(data); err != nil {
+		return err
+	}
+	return terminateLine(w, opts.Join)
+}
+
+func indentString(opts Options) string {
 	if opts.Tab {
-		indent = "\t"
-	} else if opts.Indent > 0 {
-		indent = ""
-		for range opts.Indent {
-			indent += " "
-		}
+		return "\t"
 	}
-
-	data, err := json.MarshalIndent(v, "", indent)
-	if err != nil {
-		return err
+	if opts.Indent > 0 {
+		return strings.Repeat(" ", opts.Indent)
 	}
-	_, err = w.Write(data)
-	if err != nil {
-		return err
-	}
-	if !opts.Join {
-		_, err = fmt.Fprintln(w)
-	}
-	return err
+	return "  "
 }
 
 func writeTOON(w io.Writer, v any, opts Options) error {
@@ -96,12 +86,17 @@ func writeTOON(w io.Writer, v any, opts Options) error {
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(data)
-	if err != nil {
+	if _, err = w.Write(data); err != nil {
 		return err
 	}
-	if !opts.Join {
-		_, err = fmt.Fprintln(w)
+	return terminateLine(w, opts.Join)
+}
+
+// terminateLine writes a newline unless join mode is active.
+func terminateLine(w io.Writer, join bool) error {
+	if join {
+		return nil
 	}
+	_, err := fmt.Fprintln(w)
 	return err
 }
