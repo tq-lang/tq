@@ -132,6 +132,15 @@ func TestCLI(t *testing.T) {
 		// --stream flag
 		{"stream flag", `{"a":1,"b":2}`, []string{"--stream", "--json", "-c", "."}, 0, `[["a"],1]`, ""},
 		{"stream with filter", `{"a":1,"b":2}`, []string{"--stream", "--json", "-c", `select(.[0][0] == "a")`}, 0, `[["a"],1]`, ""},
+		{"stream nested json", `{"a":[1,2],"b":3}`, []string{"--stream", "--json", "-c", "."}, 0, `[["a",0],1]`, ""},
+		{"stream empty object", `{}`, []string{"--stream", "--json", "-c", "."}, 0, `[[],{}]`, ""},
+		{"stream empty array", `[]`, []string{"--stream", "--json", "-c", "."}, 0, `[[],[]]`, ""},
+		{"stream toon fallback", "name: Alice\nage: 30", []string{"--stream", "--json", "-c", "."}, 0, `[["name"],"Alice"]`, ""},
+		{"stream scalar", `42`, []string{"--stream", "--json", "-c", "."}, 0, `[[],42]`, ""},
+		{"stream slurp json", `{"a":1}`, []string{"--stream", "--slurp", "--json", "-c", "."}, 0, `[["a"],1]`, ""},
+		{"stream slurp toon", "name: Alice\nage: 30", []string{"--stream", "--slurp", "--json", "-c", "."}, 0, `[[0,"name"],"Alice"]`, ""},
+		{"stream toon true prefix", "true_value: 1\nother: 2", []string{"--stream", "--json", "-c", "."}, 0, `[["true_value"],1]`, ""},
+		{"stream toon false prefix", "false_alarm: yes", []string{"--stream", "--json", "-c", "."}, 0, `[["false_alarm"],"yes"]`, ""},
 
 		// Errors
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},

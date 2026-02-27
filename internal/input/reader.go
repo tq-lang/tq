@@ -54,6 +54,17 @@ func NewReader(r io.Reader) *Reader {
 	return sr
 }
 
+// NewTOONReader creates a reader that parses TOON documents without format
+// detection. Use this when the caller has already confirmed the input is TOON.
+func NewTOONReader(r io.Reader) *Reader {
+	br := bufio.NewReader(r)
+	return &Reader{
+		format:     detect.TOON,
+		underlying: br,
+		scanner:    bufio.NewScanner(br),
+	}
+}
+
 // Next returns the next parsed value from the stream.
 // Returns (value, true, nil) for each value, (nil, false, nil) at EOF,
 // or (nil, false, err) on parse error.
