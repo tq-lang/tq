@@ -177,17 +177,6 @@ cat data.json | tq '.'
 cat data.toon | tq --json '.'
 ```
 
-## Roadmap
-
-- [x] Full jq filter language support
-- [x] Auto-detect TOON/JSON input
-- [x] TOON and JSON output
-- [x] File and stdin input
-- [x] Streaming mode for large files
-- [ ] Shell completions (bash, zsh, fish)
-- [ ] Homebrew formula
-- [ ] TOON-specific query extensions
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
