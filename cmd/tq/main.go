@@ -236,8 +236,10 @@ func run() int {
 		exitCode = executeFilter(code, nil, varValues, opts, &hasOutput)
 	} else if len(fileArgs) > 0 {
 		exitCode = processFiles(fileArgs, code, varValues, opts, cfg.slurp, sc, &hasOutput)
+	} else if cfg.slurp {
+		exitCode = slurpAll(os.Stdin, "stdin", code, varValues, opts, sc, &hasOutput)
 	} else {
-		exitCode = processStream(os.Stdin, code, varValues, opts, cfg.slurp, sc, &hasOutput)
+		exitCode = filterAll(os.Stdin, "stdin", code, varValues, opts, &hasOutput, sc)
 	}
 
 	if cfg.exitStatus && !hasOutput && exitCode == exitOK {
@@ -247,13 +249,18 @@ func run() int {
 	return exitCode
 }
 
-// processStream reads values from a stream and executes the filter on each.
-// With slurp, all values are collected into an array before filtering.
-func processStream(r io.Reader, code *gojq.Code, varValues []any, opts output.Options, slurp bool, sc *streamCfg, hasOutput *bool) int {
-	if slurp {
-		return slurpAll(r, "stdin", code, varValues, opts, sc, hasOutput)
+// resolveReader returns the appropriate value iterator and filter code.
+// When sc is nil (no --stream), uses the standard Reader with code.
+// When sc is set, detects JSON vs TOON and picks the right reader/code pair.
+func resolveReader(r io.Reader, code *gojq.Code, sc *streamCfg) (valueIterator, *gojq.Code) {
+	if sc == nil {
+		return input.NewReader(r), code
 	}
-	return filterAll(r, "stdin", code, varValues, opts, hasOutput, sc)
+	br := bufio.NewReader(r)
+	if !isConfirmedJSON(br) {
+		return input.NewTOONReader(br), sc.toonCode
+	}
+	return input.NewTokenReader(br), sc.code
 }
 
 // processFiles reads each file (or "-" for stdin) as a streaming source.
@@ -261,7 +268,7 @@ func processFiles(files []string, code *gojq.Code, varValues []any, opts output.
 	if slurp {
 		var all []any
 		for _, f := range files {
-			vals, rc := slurpFileValues(f, sc)
+			vals, rc := slurpFileValues(f, code, sc)
 			if rc != 0 {
 				return rc
 			}
@@ -294,25 +301,21 @@ func filterFile(filename string, code *gojq.Code, varValues []any, opts output.O
 }
 
 // slurpFileValues reads all values from a single file into a slice.
-// In stream mode, JSON inputs produce [path,value] pairs via TokenReader;
-// TOON inputs produce full docs (the caller applies toonCode via slurpAll).
-func slurpFileValues(filename string, sc *streamCfg) ([]any, int) {
+func slurpFileValues(filename string, code *gojq.Code, sc *streamCfg) ([]any, int) {
 	r, cleanup, rc := openFileReader(filename)
 	if rc != 0 {
 		return nil, rc
 	}
 	defer cleanup()
-	return collectValues(r, fileLabel(filename), sc)
+	iter, _ := resolveReader(r, code, sc)
+	return collectReaderValues(iter, fileLabel(filename))
 }
 
 // filterAll reads values from r and runs the filter on each.
-// When sc is non-nil (--stream) and input is JSON, uses TokenReader for O(depth) memory.
-// For TOON stream mode, falls back to the pre-compiled toonCode with tostream wrapping.
+// Delegates to resolveReader for format detection and stream mode handling.
 func filterAll(r io.Reader, label string, code *gojq.Code, varValues []any, opts output.Options, hasOutput *bool, sc *streamCfg) int {
-	if sc == nil {
-		return filterLoop(input.NewReader(r), label, code, varValues, opts, hasOutput)
-	}
-	return filterAllStream(r, label, code, varValues, opts, hasOutput, sc)
+	iter, filterCode := resolveReader(r, code, sc)
+	return filterLoop(iter, label, filterCode, varValues, opts, hasOutput)
 }
 
 // filterLoop reads values from a reader and runs the filter on each.
@@ -339,54 +342,15 @@ type valueIterator interface {
 	Next() (any, bool, error)
 }
 
-// filterAllStream uses format detection to choose between TokenReader (JSON)
-// and tostream-wrapped filter (TOON) for --stream mode.
-func filterAllStream(r io.Reader, label string, code *gojq.Code, varValues []any, opts output.Options, hasOutput *bool, sc *streamCfg) int {
-	br := bufio.NewReader(r)
-
-	if !isConfirmedJSON(br) {
-		// TOON path: read full values via TOON reader, apply tostream-wrapped filter.
-		return filterLoop(input.NewTOONReader(br), label, sc.toonCode, varValues, opts, hasOutput)
-	}
-
-	// Confirmed JSON — stream via TokenReader for O(depth) memory.
-	return filterLoop(input.NewTokenReader(br), label, code, varValues, opts, hasOutput)
-}
-
 // slurpAll collects all values from r into an array, then runs the filter once.
-// In stream mode, JSON inputs are collected as [path,value] pairs via TokenReader;
-// TOON inputs are collected as full docs with the tostream-wrapped filter applied.
+// resolveReader picks the right iterator and filter code for the detected format.
 func slurpAll(r io.Reader, label string, code *gojq.Code, varValues []any, opts output.Options, sc *streamCfg, hasOutput *bool) int {
-	vals, rc := collectValues(r, label, sc)
+	iter, filterCode := resolveReader(r, code, sc)
+	vals, rc := collectReaderValues(iter, label)
 	if rc != 0 {
 		return rc
 	}
-	filterCode := code
-	if sc != nil && !isSliceOfPairs(vals) {
-		// TOON slurp: vals are full documents, use tostream-wrapped filter.
-		filterCode = sc.toonCode
-	}
 	return executeFilter(filterCode, vals, varValues, opts, hasOutput)
-}
-
-// isSliceOfPairs returns true if vals contains [path,value] stream pairs
-// (i.e. JSON stream mode produced them). Returns false for full TOON docs.
-func isSliceOfPairs(vals []any) bool {
-	if len(vals) == 0 {
-		return false
-	}
-	_, ok := vals[0].([]any)
-	return ok
-}
-
-// collectValues reads values from r into a slice. When sc is non-nil and the
-// input is confirmed JSON, it uses TokenReader to emit [path,value] pairs.
-// Otherwise it reads full values via Reader.
-func collectValues(r io.Reader, label string, sc *streamCfg) ([]any, int) {
-	if sc != nil {
-		return collectStreamValues(r, label)
-	}
-	return collectReaderValues(input.NewReader(r), label)
 }
 
 func collectReaderValues(next valueIterator, label string) ([]any, int) {
@@ -403,18 +367,6 @@ func collectReaderValues(next valueIterator, label string) ([]any, int) {
 		vals = append(vals, v)
 	}
 	return vals, 0
-}
-
-func collectStreamValues(r io.Reader, label string) ([]any, int) {
-	br := bufio.NewReader(r)
-
-	if !isConfirmedJSON(br) {
-		// TOON: collect full values; caller will use toonCode.
-		return collectReaderValues(input.NewTOONReader(br), label)
-	}
-
-	// Confirmed JSON: collect [path,value] pairs.
-	return collectReaderValues(input.NewTokenReader(br), label)
 }
 
 // isConfirmedJSON detects the input format from a buffered reader and validates
