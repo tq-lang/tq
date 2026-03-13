@@ -1,12 +1,15 @@
 VERSION ?= dev
 
-.PHONY: build test lint check cover clean
+.PHONY: build test test-docs lint check cover clean
 
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o tq ./cmd/tq
 
 test:
 	go test -v ./...
+
+test-docs:
+	go test -v -run TestDocs ./cmd/tq
 
 lint:
 	golangci-lint run

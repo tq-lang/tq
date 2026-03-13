@@ -43,6 +43,22 @@ make lint
 make check
 ```
 
+### Documentation Tests
+
+All code examples in `docs/*.md` are integration-tested — they run against the real `tq` binary on every `make test`. If you change tq's output format or CLI behaviour, update the affected examples and run `make test-docs` to verify them.
+
+Use fenced ` ```tq ` blocks with `# output` and optional `# output error (exit: N)` markers:
+
+````markdown
+```tq
+echo '{"name":"Alice"}' | tq '.name'
+# output
+Alice
+```
+````
+
+Only `tq`, `echo`, `printf`, and `cat` heredocs are allowed — examples are executed by a Go mini-interpreter, not a shell. See `docs/cheatsheet.md` for the full format.
+
 ## Commit Messages
 
 We use [Conventional Commits](https://www.conventionalcommits.org/). Prefix your commit message with a type:
