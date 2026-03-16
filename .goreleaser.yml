@@ -14,11 +14,11 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 changelog:
   use: git
@@ -27,3 +27,11 @@ changelog:
       - "^chore:"
       - "^docs:"
       - "^ci:"
+
+homebrew_casks:
+  - repository:
+      owner: tq-lang
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/tq-lang/tq
+    description: "Command-line TOON/JSON processor — jq for TOON"
