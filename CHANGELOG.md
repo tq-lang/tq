@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-16
+
+### Features
+- add Homebrew tap support for installation (076edb6)
+
 ## 2026-03-13
 
 ### Features
