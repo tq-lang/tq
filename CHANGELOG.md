@@ -1,9 +1,29 @@
 # Changelog
 
+## 2026-03-16
+
+### Features
+- add Homebrew tap support for installation (076edb6)
+
+## 2026-03-13
+
+### Features
+- integration-tested cheatsheet with 80+ runnable examples (8e3e8b4)
+
+### Docs
+- add guide, recipes, errors, and vs-jq with 220+ tested examples (5bf3b7b)
+
 ## 2026-02-27
+
+### Features
+- streaming JSON tokenizer for --stream mode (O(depth) memory) (033fa1f)
+
+### Refactor
+- consolidate stream dispatch into resolveReader (1d003e9)
 
 ### Docs
 - note natural split points in input package doc (b42388b)
+- remove roadmap section from README (0901ffb)
 
 ### Build
 - add VERSION ldflags to Makefile and document build (5c6cd5d)

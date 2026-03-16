@@ -77,6 +77,22 @@ We use [Conventional Commits](https://www.conventionalcommits.org/). Prefix your
 - Update documentation if behavior changes
 - Ensure `make check` passes before submitting
 
+## Release Setup
+
+Releases are automated via GoReleaser on tag push. The Homebrew formula is published to [`tq-lang/homebrew-tap`](https://github.com/tq-lang/homebrew-tap) automatically, but requires a one-time secret setup:
+
+1. Go to https://github.com/settings/personal-access-tokens/new
+2. Create a **fine-grained PAT** with:
+   - **Resource owner**: `tq-lang`
+   - **Repository access**: Only select `tq-lang/homebrew-tap`
+   - **Permissions**: Contents → **Read and write**
+3. Go to https://github.com/tq-lang/tq/settings/secrets/actions
+4. Add a new repository secret:
+   - **Name**: `HOMEBREW_TAP_TOKEN`
+   - **Value**: the PAT from step 2
+
+After this, any `v*` tag push will build binaries, create a GitHub release, and update the Homebrew formula.
+
 ## Reporting Issues
 
 - Use the [bug report template](https://github.com/tq-lang/tq/issues/new?template=bug_report.md) for bugs

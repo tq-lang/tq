@@ -35,6 +35,12 @@ echo '{"users":[{"id":1,"name":"Alice","active":true},{"id":2,"name":"Bob","acti
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew install tq-lang/tap/tq
+```
+
 ### From source
 
 ```bash
