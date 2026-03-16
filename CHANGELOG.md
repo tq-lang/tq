@@ -3,7 +3,7 @@
 ## 2026-03-16
 
 ### Features
-- add Homebrew tap support for installation (076edb6)
+- Homebrew tap for brew install tq-lang/tap/tq (#9) (05eb11d)
 
 ## 2026-03-13
 
