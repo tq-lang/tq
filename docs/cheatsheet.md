@@ -708,9 +708,9 @@ Decompose a TOON document (same path-value format):
 ```tq
 printf 'name: Alice\nage: 30' | tq --stream --json -c '.'
 # output
-[["age"],30]
 [["name"],"Alice"]
-[["name"]]
+[["age"],30]
+[["age"]]
 ```
 
 Filter streamed output by path:

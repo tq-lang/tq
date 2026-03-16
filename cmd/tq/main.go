@@ -35,22 +35,24 @@ func main() {
 
 // config holds parsed CLI flags.
 type config struct {
-	jsonOutput bool
-	toonOutput bool
-	rawOutput  bool
-	compact    bool
-	slurp      bool
-	nullInput  bool
-	joinOutput bool
-	tab        bool
-	indent     int
-	exitStatus bool
-	stream     bool
-	delimiter  string
-	fromFile   string
-	version    bool
-	argPairs   []string
-	argjsonPairs []string
+	jsonOutput      bool
+	toonOutput      bool
+	rawOutput       bool
+	compact         bool
+	slurp           bool
+	nullInput       bool
+	joinOutput      bool
+	tab             bool
+	indent          int
+	exitStatus      bool
+	stream          bool
+	noStream        bool
+	streamThreshold string
+	delimiter       string
+	fromFile        string
+	version         bool
+	argPairs        []string
+	argjsonPairs    []string
 }
 
 func parseFlags() (*config, []string) {
@@ -67,6 +69,8 @@ func parseFlags() (*config, []string) {
 	flag.IntVar(&cfg.indent, "indent", 0, "number of spaces for indentation")
 	flag.BoolVarP(&cfg.exitStatus, "exit-status", "e", false, "set exit code based on output")
 	flag.BoolVar(&cfg.stream, "stream", false, "output path-value pairs for streaming")
+	flag.BoolVar(&cfg.noStream, "no-stream", false, "disable auto-streaming for large files")
+	flag.StringVar(&cfg.streamThreshold, "stream-threshold", "", "auto-stream file size threshold (e.g. 256MB, 1GB)")
 	flag.StringVar(&cfg.delimiter, "delimiter", "", "TOON output delimiter: comma, tab, pipe")
 	flag.StringVarP(&cfg.fromFile, "from-file", "f", "", "read filter from file")
 	flag.BoolVar(&cfg.version, "version", false, "print version")
@@ -161,12 +165,19 @@ func resolveDelimiter(s string) (toon.Delimiter, int) {
 	}
 }
 
-// streamCfg holds pre-compiled filter state for --stream mode.
-// JSON inputs use TokenReader (O(depth) memory); TOON inputs fall back
-// to the tostream-wrapped filter since TokenReader is JSON-only.
+// streamCfg holds pre-compiled filter state for streaming mode.
+// Both JSON and TOON use native TokenReaders with O(depth) memory.
 type streamCfg struct {
-	code     *gojq.Code // plain filter (used for JSON TokenReader output)
-	toonCode *gojq.Code // tostream | (filter) (used for TOON fallback)
+	code *gojq.Code // filter applied to [path, value] pairs
+}
+
+// buildStreamCfg creates a streamCfg from the user's filter expression.
+func buildStreamCfg(filterExpr string, argVars, argjsonVars []keyValue) (*streamCfg, int) {
+	code, _, rc := compileFilter(filterExpr, argVars, argjsonVars)
+	if rc != 0 {
+		return nil, rc
+	}
+	return &streamCfg{code: code}, 0
 }
 
 func run() int {
@@ -201,18 +212,18 @@ func run() int {
 		return rc
 	}
 
-	// When --stream is set, pre-compile a wrapped filter for TOON inputs.
-	// JSON inputs use the TokenReader (O(depth) memory), but TOON inputs
-	// still need the tostream | (...) approach since TokenReader is JSON-only.
+	// Build streaming config when --stream is explicitly set.
 	var sc *streamCfg
 	if cfg.stream {
-		toonExpr := "tostream | (" + filterExpr + ")"
-		toonCode, _, trc := compileFilter(toonExpr, argVars, argjsonVars)
-		if trc != 0 {
-			return trc
+		var src int
+		sc, src = buildStreamCfg(filterExpr, argVars, argjsonVars)
+		if src != 0 {
+			return src
 		}
-		sc = &streamCfg{code: code, toonCode: toonCode}
+		warnNonStreamable(filterExpr)
 	}
+
+	threshold := resolveStreamThreshold(cfg)
 
 	delim, rc := resolveDelimiter(cfg.delimiter)
 	if rc != 0 {
@@ -235,7 +246,7 @@ func run() int {
 	if cfg.nullInput {
 		exitCode = executeFilter(code, nil, varValues, opts, &hasOutput)
 	} else if len(fileArgs) > 0 {
-		exitCode = processFiles(fileArgs, code, varValues, opts, cfg.slurp, sc, &hasOutput)
+		exitCode = processFiles(fileArgs, code, varValues, opts, cfg.slurp, sc, &hasOutput, cfg, threshold, filterExpr, argVars, argjsonVars)
 	} else if cfg.slurp {
 		exitCode = slurpAll(os.Stdin, "stdin", code, varValues, opts, sc, &hasOutput)
 	} else {
@@ -251,20 +262,20 @@ func run() int {
 
 // resolveReader returns the appropriate value iterator and filter code.
 // When sc is nil (no --stream), uses the standard Reader with code.
-// When sc is set, detects JSON vs TOON and picks the right reader/code pair.
+// When sc is set, detects JSON vs TOON and picks the right native tokenizer.
 func resolveReader(r io.Reader, code *gojq.Code, sc *streamCfg) (valueIterator, *gojq.Code) {
 	if sc == nil {
 		return input.NewReader(r), code
 	}
 	br := bufio.NewReader(r)
 	if !isConfirmedJSON(br) {
-		return input.NewTOONReader(br), sc.toonCode
+		return input.NewTOONTokenReader(br), sc.code
 	}
 	return input.NewTokenReader(br), sc.code
 }
 
 // processFiles reads each file (or "-" for stdin) as a streaming source.
-func processFiles(files []string, code *gojq.Code, varValues []any, opts output.Options, slurp bool, sc *streamCfg, hasOutput *bool) int {
+func processFiles(files []string, code *gojq.Code, varValues []any, opts output.Options, slurp bool, sc *streamCfg, hasOutput *bool, cfg *config, threshold int64, filterExpr string, argVars, argjsonVars []keyValue) int {
 	if slurp {
 		var all []any
 		for _, f := range files {
@@ -279,7 +290,18 @@ func processFiles(files []string, code *gojq.Code, varValues []any, opts output.
 
 	exitCode := 0
 	for _, f := range files {
-		rc := filterFile(f, code, varValues, opts, hasOutput, sc)
+		fileSC := sc
+		// Auto-detect streaming for large files when not explicitly set.
+		if fileSC == nil && !cfg.noStream && shouldAutoStream(f, threshold) {
+			var src int
+			fileSC, src = buildStreamCfg(filterExpr, argVars, argjsonVars)
+			if src != 0 {
+				return src
+			}
+			fmt.Fprintf(os.Stderr, "tq: info: streaming enabled for %s (file > %s)\n", fileLabel(f), formatSize(threshold))
+			warnNonStreamable(filterExpr)
+		}
+		rc := filterFile(f, code, varValues, opts, hasOutput, fileSC)
 		if rc == exitUsage {
 			return rc
 		}
@@ -426,7 +448,7 @@ func openFileReader(filename string) (io.Reader, func(), int) {
 		fmt.Fprintf(os.Stderr, "tq: %v\n", err)
 		return nil, nil, exitUsage
 	}
-	return fh, func() { fh.Close() }, 0
+	return fh, func() { _ = fh.Close() }, 0
 }
 
 func fileLabel(filename string) string {
@@ -455,6 +477,124 @@ func executeFilter(code *gojq.Code, inp any, varValues []any, opts output.Option
 		}
 	}
 	return exitOK
+}
+
+// shouldAutoStream returns true if filename refers to a file >= threshold bytes.
+func shouldAutoStream(filename string, threshold int64) bool {
+	if filename == "-" {
+		return false
+	}
+	info, err := os.Stat(filename)
+	if err != nil {
+		return false
+	}
+	return info.Size() >= threshold
+}
+
+// resolveStreamThreshold determines the auto-stream threshold.
+// Priority: --stream-threshold flag > TQ_STREAM_THRESHOLD env > 256MB default.
+func resolveStreamThreshold(cfg *config) int64 {
+	if cfg.streamThreshold != "" {
+		if v, err := parseSize(cfg.streamThreshold); err == nil {
+			return v
+		}
+		fmt.Fprintf(os.Stderr, "tq: warning: invalid --stream-threshold %q, using default\n", cfg.streamThreshold)
+	}
+	if env := os.Getenv("TQ_STREAM_THRESHOLD"); env != "" {
+		if v, err := parseSize(env); err == nil {
+			return v
+		}
+	}
+	return 256 * 1024 * 1024 // 256MB
+}
+
+// parseSize parses a human-readable size string like "256MB", "1GB".
+func parseSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	s = strings.ToUpper(s)
+
+	multipliers := []struct {
+		suffix string
+		mult   int64
+	}{
+		{"GB", 1024 * 1024 * 1024},
+		{"MB", 1024 * 1024},
+		{"KB", 1024},
+		{"B", 1},
+	}
+
+	for _, m := range multipliers {
+		if strings.HasSuffix(s, m.suffix) {
+			numStr := strings.TrimSpace(s[:len(s)-len(m.suffix)])
+			var n int64
+			if _, err := fmt.Sscanf(numStr, "%d", &n); err != nil {
+				return 0, fmt.Errorf("invalid size: %s", s)
+			}
+			return n * m.mult, nil
+		}
+	}
+
+	// Plain number = bytes.
+	var n int64
+	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
+		return 0, fmt.Errorf("invalid size: %s", s)
+	}
+	return n, nil
+}
+
+// formatSize returns a human-readable size string.
+func formatSize(bytes int64) string {
+	switch {
+	case bytes >= 1024*1024*1024:
+		return fmt.Sprintf("%dGB", bytes/(1024*1024*1024))
+	case bytes >= 1024*1024:
+		return fmt.Sprintf("%dMB", bytes/(1024*1024))
+	case bytes >= 1024:
+		return fmt.Sprintf("%dKB", bytes/1024)
+	default:
+		return fmt.Sprintf("%dB", bytes)
+	}
+}
+
+// warnNonStreamable prints a warning for filter builtins that may not work
+// as expected in streaming mode where input is [path,value] pairs.
+func warnNonStreamable(filterExpr string) {
+	builtins := []string{
+		"sort_by", "group_by", "unique_by", "min_by", "max_by",
+		"sort", "unique", "reverse", "transpose", "flatten",
+		"combinations", "walk",
+	}
+	for _, name := range builtins {
+		if matchesBuiltin(filterExpr, name) {
+			fmt.Fprintf(os.Stderr,
+				"tq: warning: '%s' may not work as expected in streaming mode "+
+					"(input is [path,value] pairs, not the full document)\n", name)
+		}
+	}
+}
+
+// matchesBuiltin checks if filterExpr contains name as a whole word.
+func matchesBuiltin(filterExpr, name string) bool {
+	idx := 0
+	for {
+		pos := strings.Index(filterExpr[idx:], name)
+		if pos == -1 {
+			return false
+		}
+		pos += idx
+		before := pos - 1
+		after := pos + len(name)
+		beforeOK := before < 0 || !isIdentChar(filterExpr[before])
+		afterOK := after >= len(filterExpr) || !isIdentChar(filterExpr[after])
+		if beforeOK && afterOK {
+			return true
+		}
+		idx = pos + len(name)
+	}
+}
+
+func isIdentChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
 }
 
 // keyValue holds a --arg or --argjson pair.

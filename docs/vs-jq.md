@@ -160,12 +160,12 @@ echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}' | tq --stream --json -c 'sele
 ```tq
 printf 'name: Alice\nage: 30\n' | tq --stream --json -c '.'
 # output
-[["age"],30]
 [["name"],"Alice"]
-[["name"]]
+[["age"],30]
+[["age"]]
 ```
 
-Use `--stream` when processing large JSON files; for TOON inputs it still produces the streaming format but without the memory benefit.
+Use `--stream` when processing large JSON or TOON files with O(depth) memory.
 
 ---
 

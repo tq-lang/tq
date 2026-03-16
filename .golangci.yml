@@ -1,0 +1,55 @@
+version: "2"
+
+linters:
+  enable:
+    - staticcheck   # deep semantic analysis (includes gosimple)
+    - govet
+    - errcheck      # unchecked errors
+    - gosec         # security
+    - revive        # code style
+    - gocyclo       # complexity
+    - misspell
+    - unconvert
+    - unparam
+
+  settings:
+    errcheck:
+      check-type-assertions: false
+    gocyclo:
+      min-complexity: 30
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+
+  exclusions:
+    generated: strict
+    rules:
+      # Test files: suppress gosec and errcheck noise.
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+      # CLI tool intentionally opens user-provided files.
+      - linters:
+          - gosec
+        text: "G304"
+        path: cmd/tq/main\.go
+      # Integer overflow in Maxrss/HeapInuse conversions is safe.
+      - linters:
+          - gosec
+        text: "G115"
+      # detect package stutter is pre-existing public API.
+      - linters:
+          - revive
+        text: "stutters"
+        path: internal/detect/
+
+run:
+  timeout: 5m
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
