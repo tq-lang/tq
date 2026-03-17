@@ -26,6 +26,7 @@
 
 ### Chores
 - add CODEOWNERS (#28) (9397cac)
+- drop accidental changelog noise (f5a173d)
 - reduce changelog merge conflicts via gitattributes (3a5d451)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
