@@ -38,6 +38,10 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
       pull_request:
         enabled: true
+        base:
+          owner: tq-lang
+          name: homebrew-tap
+          branch: main
     homepage: https://github.com/tq-lang/tq
     description: "Command-line TOON/JSON processor — jq for TOON"
     license: MIT
