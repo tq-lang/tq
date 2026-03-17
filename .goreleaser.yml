@@ -36,6 +36,7 @@ brews:
       owner: tq-lang
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      branch: goreleaser-{{ .ProjectName }}-{{ .Version }}
       pull_request:
         enabled: true
         base:
