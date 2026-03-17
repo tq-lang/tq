@@ -9,6 +9,7 @@
 ### Fixes
 - handle merge refs in CI verification (ffc4af2)
 - make pre-commit and CI generation consistent (b810f9f)
+- select non-main parent on merge commits (e54d8c6)
 
 ### Refactor
 - split main into focused modules (#25) (c3c2976)
