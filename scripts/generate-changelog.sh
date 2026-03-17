@@ -12,6 +12,15 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
 LOG_REF="HEAD~1"
 
+# In PR CI we run on a synthetic merge commit. Use the PR parent chain so
+# changelog verification reflects what contributors generate locally.
+if git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
+  LOG_REF="HEAD^2~1"
+  if ! git rev-parse --verify "$LOG_REF" >/dev/null 2>&1; then
+    LOG_REF="HEAD^2"
+  fi
+fi
+
 if ! git rev-parse --verify "$LOG_REF" >/dev/null 2>&1; then
   LOG_REF="HEAD"
 fi

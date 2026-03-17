@@ -12,6 +12,9 @@
 - bump golangci/golangci-lint-action from 6 to 9 (#16) (a06d964)
 - bump goreleaser/goreleaser-action from 6 to 7 (#14) (84c9fd7)
 
+### CI
+- fetch full history for changelog verification (43e706b)
+
 ### Chores
 - version hooks and enforce changelog checks (272230b)
 
