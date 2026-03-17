@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.0-rc4](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc4) — 2026-03-17
+
+### Build
+
+- open tap PR instead of direct push ([02d2c7d](https://github.com/tq-lang/tq/commit/02d2c7d764ea94aa0b3db5210ce091339c292568))
 ## [0.1.0-rc3](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc3) — 2026-03-17
 
 ### Build
