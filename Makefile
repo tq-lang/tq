@@ -1,12 +1,22 @@
 VERSION ?= dev
 
-.PHONY: build test test-docs lint check cover clean
+.PHONY: build test test-docs lint check cover clean setup-hooks generate-changelog check-changelog
 
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o tq ./cmd/tq
 
 test:
 	go test -v ./...
+
+setup-hooks:
+	bash scripts/setup-hooks.sh
+
+generate-changelog:
+	bash scripts/generate-changelog.sh
+
+check-changelog:
+	bash scripts/generate-changelog.sh
+	git diff --exit-code -- CHANGELOG.md
 
 test-docs:
 	go test -v -run TestDocs ./cmd/tq
@@ -27,7 +37,7 @@ cover:
 	@echo "--- CLI integration coverage (all packages) ---"
 	@go tool covdata percent -i=$(CURDIR)/.coverdata
 
-check: lint test build
+check: lint test build check-changelog
 
 clean:
 	rm -f tq

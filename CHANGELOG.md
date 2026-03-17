@@ -6,11 +6,25 @@
 - grouped help, --quiet flag, env/docs in help output (#19) (2947185)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
+### Fixes
+- handle merge refs in CI verification (ffc4af2)
+- make pre-commit and CI generation consistent (b810f9f)
+- select non-main parent on merge commits (e54d8c6)
+
+### Refactor
+- split main into focused modules (#25) (c3c2976)
+
 ### Build
 - bump actions/checkout from 4 to 6 (#15) (41d47be)
 - bump actions/setup-go from 5 to 6 (#13) (b857102)
 - bump golangci/golangci-lint-action from 6 to 9 (#16) (a06d964)
 - bump goreleaser/goreleaser-action from 6 to 7 (#14) (84c9fd7)
+
+### CI
+- fetch full history for changelog verification (43e706b)
+
+### Chores
+- version hooks and enforce changelog checks (272230b)
 
 ## 2026-03-16
 

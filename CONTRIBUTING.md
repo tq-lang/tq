@@ -43,6 +43,19 @@ make lint
 make check
 ```
 
+### Git Hooks
+
+Install repository-managed hooks once after cloning:
+
+```bash
+make setup-hooks
+```
+
+This configures `core.hooksPath` to `.githooks` and enables:
+
+- `pre-commit`: regenerates and stages `CHANGELOG.md`
+- `commit-msg`: enforces [Conventional Commits](https://www.conventionalcommits.org/)
+
 ### Documentation Tests
 
 All code examples in `docs/*.md` are integration-tested — they run against the real `tq` binary on every `make test`. If you change tq's output format or CLI behaviour, update the affected examples and run `make test-docs` to verify them.
