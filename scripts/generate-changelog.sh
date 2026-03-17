@@ -1,45 +1,12 @@
 #!/usr/bin/env bash
 # Generate CHANGELOG.md from git log using Conventional Commits format.
 # Groups entries by date, then by commit type.
-#
-# Note: this script intentionally excludes HEAD when possible. It is run by
-# pre-commit before the new commit exists, so the changelog naturally lags by
-# one commit and is finalized on the next commit.
 
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
-LOG_REF="HEAD~1"
-
-# In merge commits, pick the non-main parent chain so changelog verification
-# behaves consistently both in local merges and PR synthetic merge refs.
-if git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
-  parent1="HEAD^1"
-  parent2="HEAD^2"
-  log_parent="$parent2"
-
-  if git rev-parse --verify origin/main >/dev/null 2>&1; then
-    p1_on_main=false
-    p2_on_main=false
-    git merge-base --is-ancestor "$parent1" origin/main >/dev/null 2>&1 && p1_on_main=true
-    git merge-base --is-ancestor "$parent2" origin/main >/dev/null 2>&1 && p2_on_main=true
-    if $p1_on_main && ! $p2_on_main; then
-      log_parent="$parent2"
-    elif $p2_on_main && ! $p1_on_main; then
-      log_parent="$parent1"
-    fi
-  fi
-
-  LOG_REF="${log_parent}~1"
-  if ! git rev-parse --verify "$LOG_REF" >/dev/null 2>&1; then
-    LOG_REF="$log_parent"
-  fi
-fi
-
-if ! git rev-parse --verify "$LOG_REF" >/dev/null 2>&1; then
-  LOG_REF="HEAD"
-fi
+LOG_REF="HEAD"
 
 # Map conventional commit types to section headers
 type_label() {
