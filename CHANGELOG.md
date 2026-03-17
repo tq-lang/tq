@@ -3,6 +3,7 @@
 ## 2026-03-17
 
 ### Features
+- add SBOM publishing and provenance attestations (51605e3)
 - grouped help, --quiet flag, env/docs in help output (#19) (2947185)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
