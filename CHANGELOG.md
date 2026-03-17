@@ -20,6 +20,7 @@
 - run changelog verification only on pull requests (#26) (091067f)
 
 ### Chores
+- add CODEOWNERS for core maintainers (0ed47d2)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16
