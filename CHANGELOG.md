@@ -3,6 +3,7 @@
 ## 2026-03-17
 
 ### Features
+- grouped help, --quiet flag, env/docs in help output (42792bb)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
 ### Build

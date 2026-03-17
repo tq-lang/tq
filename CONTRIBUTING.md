@@ -16,7 +16,7 @@ Thank you for your interest in contributing to tq! This document provides guidel
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.24+
 - [golangci-lint](https://golangci-lint.run/)
 
 ### Build
@@ -93,10 +93,16 @@ Releases are automated via GoReleaser on tag push. The Homebrew formula is publi
 
 After this, any `v*` tag push will build binaries, create a GitHub release, and update the Homebrew formula.
 
+Release hardening policy (action SHA pinning now, SBOM/provenance phased in) is documented in [docs/adr-002-release-supply-chain.md](docs/adr-002-release-supply-chain.md).
+
 ## Reporting Issues
 
 - Use the [bug report template](https://github.com/tq-lang/tq/issues/new?template=bug_report.md) for bugs
 - Use the [feature request template](https://github.com/tq-lang/tq/issues/new?template=feature_request.md) for ideas
+
+## Reporting Security Issues
+
+See [SECURITY.md](SECURITY.md). Please use private reporting for vulnerabilities.
 
 ## Code of Conduct
 
