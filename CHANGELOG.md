@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.0-rc5](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc5) — 2026-03-17
+
+### Build
+
+- set explicit PR base for tap repo ([61dc14f](https://github.com/tq-lang/tq/commit/61dc14f7c60cefa6d4dc96b48cbc25d6faf6cf80))
 ## [0.1.0-rc4](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc4) — 2026-03-17
 
 ### Build
