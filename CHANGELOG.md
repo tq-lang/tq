@@ -19,7 +19,6 @@
 - run changelog verification only on pull requests (92d8436)
 
 ### Chores
-- remove local hooks and keep PR CI enforcement (25c530b)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16

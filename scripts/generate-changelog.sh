@@ -52,6 +52,11 @@ type_order() {
 
   # Read commits: date<TAB>hash<TAB>subject
   while IFS=$'\t' read -r date hash subject; do
+    # Skip changelog maintenance commits to avoid self-referential churn.
+    if [[ "$subject" =~ ^chore\(changelog\):\  ]]; then
+      continue
+    fi
+
     # Parse conventional commit: type(scope): description  or  type: description
     if [[ "$subject" =~ ^([a-zA-Z]+)(\(.+\))?!?:\ (.+)$ ]]; then
       cc_type="${BASH_REMATCH[1]}"
