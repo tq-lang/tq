@@ -4,6 +4,7 @@
 
 ### Build
 
+- replace changelog shell script with git-cliff ([09dd0ce](https://github.com/tq-lang/tq/commit/09dd0ce10efdbde9b646d7620bc9d026655fdd8e))
 - bump actions/setup-go from 5 to 6 ([#13](https://github.com/tq-lang/tq/pull/13)) ([b857102](https://github.com/tq-lang/tq/commit/b85710294337cc58a06b124804ced343976dab30))
 - bump goreleaser/goreleaser-action from 6 to 7 ([#14](https://github.com/tq-lang/tq/pull/14)) ([84c9fd7](https://github.com/tq-lang/tq/commit/84c9fd71e16ed9cab038b238573a8a0ad20c62cf))
 - bump golangci/golangci-lint-action from 6 to 9 ([#16](https://github.com/tq-lang/tq/pull/16)) ([a06d964](https://github.com/tq-lang/tq/commit/a06d964a5d09607ef8856a056dc8d128aebfae04))
