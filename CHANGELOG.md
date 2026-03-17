@@ -7,6 +7,7 @@
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
 ### Fixes
+- handle merge refs in CI verification (ffc4af2)
 - make pre-commit and CI generation consistent (b810f9f)
 
 ### Build
