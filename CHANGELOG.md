@@ -3,7 +3,7 @@
 ## 2026-03-17
 
 ### Features
-- add SBOM publishing and provenance attestations (51605e3)
+- add SBOM + provenance attestations (#27) (6addb9e)
 - grouped help, --quiet flag, env/docs in help output (#19) (2947185)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
@@ -20,6 +20,7 @@
 - run changelog verification only on pull requests (#26) (091067f)
 
 ### Chores
+- add CODEOWNERS for core maintainers (0ed47d2)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16
