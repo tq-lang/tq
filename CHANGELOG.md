@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### CI
+
+- install syft for SBOM generation ([82f009b](https://github.com/tq-lang/tq/commit/82f009b412b416c11f98bc99c1a7287c167b0eda))
 ## [0.1.0-rc1](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc1) — 2026-03-17
 
 ### Build
