@@ -12,6 +12,9 @@
 - bump golangci/golangci-lint-action from 6 to 9 (#16) (a06d964)
 - bump goreleaser/goreleaser-action from 6 to 7 (#14) (84c9fd7)
 
+### Chores
+- implement OSS readiness hardening for #20 (f998f3c)
+
 ## 2026-03-16
 
 ### Features
