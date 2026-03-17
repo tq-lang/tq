@@ -10,6 +10,9 @@
 - handle merge refs in CI verification (ffc4af2)
 - make pre-commit and CI generation consistent (b810f9f)
 
+### Refactor
+- split main into focused modules (#25) (c3c2976)
+
 ### Build
 - bump actions/checkout from 4 to 6 (#15) (41d47be)
 - bump actions/setup-go from 5 to 6 (#13) (b857102)
