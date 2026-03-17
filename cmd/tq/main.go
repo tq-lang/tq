@@ -48,6 +48,7 @@ type config struct {
 	stream          bool
 	noStream        bool
 	streamThreshold string
+	quiet           bool
 	delimiter       string
 	fromFile        string
 	version         bool
@@ -58,45 +59,80 @@ type config struct {
 func parseFlags() (*config, []string) {
 	cfg := &config{}
 
-	flag.BoolVar(&cfg.jsonOutput, "json", false, "output JSON instead of TOON")
-	flag.BoolVar(&cfg.toonOutput, "toon", false, "output TOON (default)")
-	flag.BoolVarP(&cfg.rawOutput, "raw-output", "r", false, "output raw strings")
-	flag.BoolVarP(&cfg.compact, "compact-output", "c", false, "compact output")
-	flag.BoolVarP(&cfg.slurp, "slurp", "s", false, "read entire input into array")
-	flag.BoolVarP(&cfg.nullInput, "null-input", "n", false, "run filter without reading input")
-	flag.BoolVarP(&cfg.joinOutput, "join-output", "j", false, "no newline between outputs")
-	flag.BoolVar(&cfg.tab, "tab", false, "use tab for indentation")
-	flag.IntVar(&cfg.indent, "indent", 0, "number of spaces for indentation")
-	flag.BoolVarP(&cfg.exitStatus, "exit-status", "e", false, "set exit code based on output")
-	flag.BoolVar(&cfg.stream, "stream", false, "output path-value pairs for streaming")
-	flag.BoolVar(&cfg.noStream, "no-stream", false, "disable auto-streaming for large files")
-	flag.StringVar(&cfg.streamThreshold, "stream-threshold", "", "auto-stream file size threshold (e.g. 256MB, 1GB)")
-	flag.StringVar(&cfg.delimiter, "delimiter", "", "TOON output delimiter: comma, tab, pipe")
-	flag.StringVarP(&cfg.fromFile, "from-file", "f", "", "read filter from file")
-	flag.BoolVar(&cfg.version, "version", false, "print version")
-	flag.StringArrayVar(&cfg.argPairs, "arg", nil, "set variable: --arg name value")
-	flag.StringArrayVar(&cfg.argjsonPairs, "argjson", nil, "set JSON variable: --argjson name value")
+	flag.BoolVar(&cfg.jsonOutput, "json", false, "")
+	flag.BoolVar(&cfg.toonOutput, "toon", false, "")
+	flag.BoolVarP(&cfg.rawOutput, "raw-output", "r", false, "")
+	flag.BoolVarP(&cfg.compact, "compact-output", "c", false, "")
+	flag.BoolVarP(&cfg.joinOutput, "join-output", "j", false, "")
+	flag.BoolVar(&cfg.tab, "tab", false, "")
+	flag.IntVar(&cfg.indent, "indent", 0, "")
+	flag.StringVar(&cfg.delimiter, "delimiter", "", "")
+	flag.BoolVarP(&cfg.slurp, "slurp", "s", false, "")
+	flag.BoolVarP(&cfg.nullInput, "null-input", "n", false, "")
+	flag.StringVarP(&cfg.fromFile, "from-file", "f", "", "")
+	flag.StringArrayVar(&cfg.argPairs, "arg", nil, "")
+	flag.StringArrayVar(&cfg.argjsonPairs, "argjson", nil, "")
+	flag.BoolVar(&cfg.stream, "stream", false, "")
+	flag.BoolVar(&cfg.noStream, "no-stream", false, "")
+	flag.StringVar(&cfg.streamThreshold, "stream-threshold", "", "")
+	flag.BoolVarP(&cfg.exitStatus, "exit-status", "e", false, "")
+	flag.BoolVarP(&cfg.quiet, "quiet", "q", false, "")
+	flag.BoolVar(&cfg.version, "version", false, "")
 
-	flag.Usage = func() {
-		fmt.Fprint(os.Stderr, `Usage: tq [flags] <filter> [file...]
+	flag.Usage = printUsage
+
+	flag.Parse()
+	return cfg, flag.Args()
+}
+
+func printUsage() {
+	fmt.Fprint(os.Stderr, `Usage: tq [flags] <filter> [file...]
 
 tq is a command-line TOON/JSON processor. Like jq, but for TOON.
 
 Examples:
-  echo '{"name":"Alice"}' | tq '.name'          # field access
-  echo '{"a":1}' | tq --json '.'                # convert to JSON
-  cat data.toon | tq '.users[] | .name'          # iterate array
-  tq -n '1 + 1'                                  # null input
-  tq '.key' file1.json file2.toon                # read from files
-  echo '{"a":1}' | tq '.' -                      # explicit stdin
+  echo '{"name":"Alice"}' | tq '.name'           # field access
+  echo '{"a":1}' | tq --json '.'                 # convert to JSON
+  cat data.toon | tq '.users[] | .name'           # iterate array
+  tq -n '1 + 1'                                   # null input
+  tq '.key' file1.json file2.toon                 # multiple files
+  echo '[1,2,3]' | tq -s 'add'                    # slurp + reduce
+  tq -f filter.jq data.json                       # filter from file
+  tq --stream --json -c '.' large.toon            # stream large files
 
-Flags:
+Output flags:
+      --json                   output JSON instead of TOON
+      --toon                   output TOON (default)
+  -r, --raw-output             output raw strings without quotes
+  -c, --compact-output         compact single-line output
+  -j, --join-output            no newline between output values
+      --tab                    indent with tabs
+      --indent N               indent with N spaces (default 2)
+      --delimiter TYPE         TOON array delimiter: comma, tab, pipe
+
+Input flags:
+  -s, --slurp                  read all inputs into an array
+  -n, --null-input             run filter with null input
+  -f, --from-file PATH         read filter from file
+      --arg NAME VALUE         bind $NAME to string VALUE
+      --argjson NAME VALUE     bind $NAME to parsed JSON VALUE
+
+Streaming flags:
+      --stream                 emit [path, value] pairs (O(depth) memory)
+      --no-stream              disable auto-streaming for large files
+      --stream-threshold SIZE  auto-stream file size (default 256MB)
+
+Other flags:
+  -e, --exit-status            exit 4 if filter produces no output
+  -q, --quiet                  suppress info and warning messages
+      --version                print version and exit
+  -h, --help                   show this help
+
+Environment:
+  TQ_STREAM_THRESHOLD          auto-stream threshold (e.g. 512MB, 1GB)
+
+Documentation: https://github.com/tq-lang/tq
 `)
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
-	return cfg, flag.Args()
 }
 
 // resolveFilter determines the jq filter expression and remaining file args.
@@ -220,7 +256,9 @@ func run() int {
 		if src != 0 {
 			return src
 		}
-		warnNonStreamable(filterExpr)
+		if !cfg.quiet {
+			warnNonStreamable(filterExpr)
+		}
 	}
 
 	threshold := resolveStreamThreshold(cfg)
@@ -298,8 +336,10 @@ func processFiles(files []string, code *gojq.Code, varValues []any, opts output.
 			if src != 0 {
 				return src
 			}
-			fmt.Fprintf(os.Stderr, "tq: info: streaming enabled for %s (file > %s)\n", fileLabel(f), formatSize(threshold))
-			warnNonStreamable(filterExpr)
+			if !cfg.quiet {
+				fmt.Fprintf(os.Stderr, "tq: info: streaming enabled for %s (file > %s)\n", fileLabel(f), formatSize(threshold))
+				warnNonStreamable(filterExpr)
+			}
 		}
 		rc := filterFile(f, code, varValues, opts, hasOutput, fileSC)
 		if rc == exitUsage {
