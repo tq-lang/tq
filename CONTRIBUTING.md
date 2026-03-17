@@ -18,6 +18,7 @@ Thank you for your interest in contributing to tq! This document provides guidel
 
 - Go 1.24+
 - [golangci-lint](https://golangci-lint.run/)
+- [git-cliff](https://git-cliff.org/) (optional, for local changelog preview via `make changelog`)
 
 ### Build
 
@@ -52,7 +53,7 @@ PR checks do not fail on changelog drift anymore, and contributors do not need t
 If you want to preview the generated changelog locally:
 
 ```bash
-make generate-changelog
+make changelog
 ```
 
 ### Documentation Tests

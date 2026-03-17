@@ -26,12 +26,17 @@ sboms:
       - spdx-json
 
 changelog:
-  use: git
-  filters:
-    exclude:
-      - "^chore:"
-      - "^docs:"
-      - "^ci:"
+  disable: true
+
+before:
+  hooks:
+    - git-cliff --current --strip header -o RELEASE_NOTES.md
+
+release:
+  extra_files: []
+  footer: |
+    **Full Changelog**: https://github.com/tq-lang/tq/blob/main/CHANGELOG.md
+  release_notes_file: RELEASE_NOTES.md
 
 brews:
   - repository:

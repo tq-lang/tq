@@ -21,3 +21,6 @@ Desktop.ini
 *.test
 *.out
 vendor/
+
+# Release artifacts
+/RELEASE_NOTES.md

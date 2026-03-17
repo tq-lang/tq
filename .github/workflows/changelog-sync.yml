@@ -15,8 +15,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install git-cliff
+        uses: taiki-e/install-action@735e5933943122c5ac182670a935f54a949265c1 # v2
+        with:
+          tool: git-cliff
+
       - name: Regenerate changelog
-        run: bash scripts/generate-changelog.sh
+        run: git-cliff -o CHANGELOG.md
 
       - name: Commit changelog update when needed
         run: |

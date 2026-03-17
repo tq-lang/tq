@@ -1,6 +1,6 @@
 VERSION ?= dev
 
-.PHONY: build test test-docs lint check cover clean generate-changelog check-changelog
+.PHONY: build test test-docs lint check cover clean changelog check-changelog
 
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o tq ./cmd/tq
@@ -8,11 +8,11 @@ build:
 test:
 	go test -v ./...
 
-generate-changelog:
-	bash scripts/generate-changelog.sh
+changelog:
+	git-cliff -o CHANGELOG.md
 
 check-changelog:
-	bash scripts/generate-changelog.sh
+	git-cliff -o CHANGELOG.md
 	git diff --exit-code -- CHANGELOG.md
 
 test-docs:

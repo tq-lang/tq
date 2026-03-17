@@ -22,6 +22,11 @@ jobs:
         with:
           go-version: "1.24"
 
+      - name: Install git-cliff
+        uses: taiki-e/install-action@735e5933943122c5ac182670a935f54a949265c1 # v2
+        with:
+          tool: git-cliff
+
       - name: Create Homebrew tap app token
         id: homebrew_tap_app_token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
