@@ -138,9 +138,17 @@ func TestCLI(t *testing.T) {
 		{"stream toon fallback", "name: Alice\nage: 30", []string{"--stream", "--json", "-c", "."}, 0, `[["name"],"Alice"]`, ""},
 		{"stream scalar", `42`, []string{"--stream", "--json", "-c", "."}, 0, `[[],42]`, ""},
 		{"stream slurp json", `{"a":1}`, []string{"--stream", "--slurp", "--json", "-c", "."}, 0, `[["a"],1]`, ""},
-		{"stream slurp toon", "name: Alice\nage: 30", []string{"--stream", "--slurp", "--json", "-c", "."}, 0, `[[0,"name"],"Alice"]`, ""},
+		{"stream slurp toon", "name: Alice\nage: 30", []string{"--stream", "--slurp", "--json", "-c", "."}, 0, `[["name"],"Alice"]`, ""},
 		{"stream toon true prefix", "true_value: 1\nother: 2", []string{"--stream", "--json", "-c", "."}, 0, `[["true_value"],1]`, ""},
 		{"stream toon false prefix", "false_alarm: yes", []string{"--stream", "--json", "-c", "."}, 0, `[["false_alarm"],"yes"]`, ""},
+
+		// TOON native streaming
+		{"stream toon nested", "a:\n  b: 1", []string{"--stream", "--json", "-c", "."}, 0, `[["a","b"],1]`, ""},
+		{"stream toon list array", "items[2]:\n  - first\n  - second", []string{"--stream", "--json", "-c", "."}, 0, `[["items",0],"first"]`, ""},
+
+		// Filter warnings
+		{"stream sort warning", `{}`, []string{"--stream", "--json", "-c", "select(false) | sort"}, 0, "", "warning: 'sort'"},
+		{"stream sort_by warning", `{}`, []string{"--stream", "--json", "-c", "select(false) | sort_by(.x)"}, 0, "", "warning: 'sort_by'"},
 
 		// Errors
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},
@@ -226,6 +234,59 @@ func TestCLIWithFiles(t *testing.T) {
 		}
 		if !strings.Contains(stdout, `{"a":1}`) || !strings.Contains(stdout, `{"b":2}`) {
 			t.Errorf("got %q, want both docs", stdout)
+		}
+	})
+
+	t.Run("auto-stream threshold", func(t *testing.T) {
+		// Create a small file and set threshold very low to trigger auto-stream.
+		f := filepath.Join(tmp, "small.json")
+		if err := os.WriteFile(f, []byte(`{"a":1}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		stdout, stderr, code := runTQ(t, "", "--stream-threshold", "1B", "--json", "-c", ".", f)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr)
+		}
+		if !strings.Contains(stderr, "streaming enabled") {
+			t.Errorf("expected auto-stream info in stderr, got %q", stderr)
+		}
+		if !strings.Contains(stdout, `[["a"],1]`) {
+			t.Errorf("expected stream output, got %q", stdout)
+		}
+	})
+
+	t.Run("no-stream suppresses auto", func(t *testing.T) {
+		f := filepath.Join(tmp, "small2.json")
+		if err := os.WriteFile(f, []byte(`{"a":1}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		_, stderr, code := runTQ(t, "", "--no-stream", "--stream-threshold", "1B", "--json", "-c", ".", f)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0", code)
+		}
+		if strings.Contains(stderr, "streaming enabled") {
+			t.Errorf("--no-stream should suppress auto-stream, got stderr %q", stderr)
+		}
+	})
+
+	t.Run("env TQ_STREAM_THRESHOLD", func(t *testing.T) {
+		f := filepath.Join(tmp, "small3.json")
+		if err := os.WriteFile(f, []byte(`{"b":2}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(binaryPath, "--json", "-c", ".", f)
+		cmd.Env = append(os.Environ(), "TQ_STREAM_THRESHOLD=1B")
+		if coverDir != "" {
+			cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+		}
+		var outBuf, errBuf strings.Builder
+		cmd.Stdout = &outBuf
+		cmd.Stderr = &errBuf
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("tq failed: %v", err)
+		}
+		if !strings.Contains(errBuf.String(), "streaming enabled") {
+			t.Errorf("expected auto-stream via env var, got stderr %q", errBuf.String())
 		}
 	})
 }

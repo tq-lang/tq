@@ -1,9 +1,18 @@
 # Changelog
 
+## 2026-03-17
+
+### Features
+- native TOON streaming with auto-detection and filter warnings (a40c2f8)
+
 ## 2026-03-16
 
 ### Features
 - Homebrew tap for brew install tq-lang/tap/tq (#9) (05eb11d)
+
+### CI
+- add Dependabot for GitHub Actions and Go modules (#12) (1e5acd6)
+- add Dependabot for GitHub Actions and Go modules (9cc6c51)
 
 ## 2026-03-13
 
