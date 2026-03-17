@@ -90,17 +90,20 @@ We use [Conventional Commits](https://www.conventionalcommits.org/). Prefix your
 
 ## Release Setup
 
-Releases are automated via GoReleaser on tag push. The Homebrew formula is published to [`tq-lang/homebrew-tap`](https://github.com/tq-lang/homebrew-tap) automatically, but requires a one-time secret setup:
+Releases are automated via GoReleaser on tag push. The Homebrew formula is published to [`tq-lang/homebrew-tap`](https://github.com/tq-lang/homebrew-tap) automatically via a GitHub App installation token.
 
-1. Go to https://github.com/settings/personal-access-tokens/new
-2. Create a **fine-grained PAT** with:
-   - **Resource owner**: `tq-lang`
-   - **Repository access**: Only select `tq-lang/homebrew-tap`
-   - **Permissions**: Contents → **Read and write**
-3. Go to https://github.com/tq-lang/tq/settings/secrets/actions
-4. Add a new repository secret:
-   - **Name**: `HOMEBREW_TAP_TOKEN`
-   - **Value**: the PAT from step 2
+One-time org setup:
+
+1. Create an org-owned GitHub App (or reuse an existing org app).
+2. Grant repository permission: **Contents: Read and write**.
+3. Install the app on `tq-lang/homebrew-tap`.
+
+One-time `tq-lang/tq` repo setup:
+
+1. Go to https://github.com/tq-lang/tq/settings/secrets/actions
+2. Add repository secrets:
+   - `HOMEBREW_TAP_APP_ID` (the GitHub App ID)
+   - `HOMEBREW_TAP_APP_PRIVATE_KEY` (the full PEM private key)
 
 After this, any `v*` tag push will build binaries, create a GitHub release, and update the Homebrew formula.
 

@@ -7,6 +7,9 @@
 - grouped help, --quiet flag, env/docs in help output (#19) (2947185)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
+### Fixes
+- auto-sync changelog on main and drop PR stale check (1de97c5)
+
 ### Refactor
 - split main into focused modules (#25) (c3c2976)
 

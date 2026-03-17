@@ -22,13 +22,22 @@ jobs:
         with:
           go-version: "1.24"
 
+      - name: Create Homebrew tap app token
+        id: homebrew_tap_app_token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.HOMEBREW_TAP_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          owner: tq-lang
+          repositories: homebrew-tap
+
       - uses: goreleaser/goreleaser-action@9a127d869fb706213d29cdf8eef3a4ea2b869415 # v7
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.homebrew_tap_app_token.outputs.token }}
 
       - name: Attest release archives
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
