@@ -7,9 +7,7 @@
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
 ### Fixes
-- handle merge refs in CI verification (ffc4af2)
-- make pre-commit and CI generation consistent (b810f9f)
-- select non-main parent on merge commits (e54d8c6)
+- ignore chore(changelog) commits in generator (cad0b9b)
 
 ### Refactor
 - split main into focused modules (#25) (c3c2976)
@@ -21,10 +19,10 @@
 - bump goreleaser/goreleaser-action from 6 to 7 (#14) (84c9fd7)
 
 ### CI
-- fetch full history for changelog verification (43e706b)
+- run changelog verification only on pull requests (92d8436)
 
 ### Chores
-- version hooks and enforce changelog checks (272230b)
+- version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16
 

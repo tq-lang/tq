@@ -43,18 +43,13 @@ make lint
 make check
 ```
 
-### Git Hooks
+### Changelog Workflow
 
-Install repository-managed hooks once after cloning:
+`CHANGELOG.md` is enforced in CI on pull requests. Generate it locally before opening or updating a PR:
 
 ```bash
-make setup-hooks
+make generate-changelog
 ```
-
-This configures `core.hooksPath` to `.githooks` and enables:
-
-- `pre-commit`: regenerates and stages `CHANGELOG.md`
-- `commit-msg`: enforces [Conventional Commits](https://www.conventionalcommits.org/)
 
 ### Documentation Tests
 
