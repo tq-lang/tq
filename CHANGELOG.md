@@ -9,7 +9,6 @@
 
 ### Fixes
 - auto-sync changelog on main and drop PR stale check (#29) (3da6c20)
-- auto-sync changelog on main and drop PR stale check (1de97c5)
 
 ### Refactor
 - split main into focused modules (#25) (c3c2976)
@@ -22,12 +21,10 @@
 
 ### CI
 - run changelog verification only on pull requests (#26) (091067f)
-- use GitHub App token for homebrew tap updates (5a3f325)
+- use GitHub App token for homebrew tap updates (#31) (b0d248d)
 
 ### Chores
 - add CODEOWNERS (#28) (9397cac)
-- drop accidental changelog noise (f5a173d)
-- reduce changelog merge conflicts via gitattributes (3a5d451)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16
