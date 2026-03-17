@@ -20,6 +20,11 @@ archives:
       - goos: windows
         formats: [zip]
 
+sboms:
+  - artifacts: archive
+    documents:
+      - spdx-json
+
 changelog:
   use: git
   filters:

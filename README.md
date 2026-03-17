@@ -57,6 +57,7 @@ make build VERSION=1.2.3      # builds ./tq with custom version
 ### From releases
 
 Download a prebuilt binary from the [Releases](https://github.com/tq-lang/tq/releases) page.
+See [docs/release-verification.md](docs/release-verification.md) for SBOM and provenance verification.
 
 ## Usage
 
