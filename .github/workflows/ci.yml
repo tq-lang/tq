@@ -22,6 +22,14 @@ jobs:
       - name: Build
         run: go build ./cmd/tq
 
+      - name: Verify changelog is up to date
+        run: |
+          bash scripts/generate-changelog.sh
+          if ! git diff --exit-code -- CHANGELOG.md; then
+            echo "CHANGELOG.md is stale. Run: make generate-changelog"
+            exit 1
+          fi
+
       - name: Vet
         run: go vet ./...
 
