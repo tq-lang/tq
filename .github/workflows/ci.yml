@@ -25,6 +25,7 @@ jobs:
         run: go build ./cmd/tq
 
       - name: Verify changelog is up to date
+        if: github.event_name == 'pull_request'
         run: |
           bash scripts/generate-changelog.sh
           if ! git diff --exit-code -- CHANGELOG.md; then
