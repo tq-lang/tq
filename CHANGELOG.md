@@ -26,6 +26,7 @@
 
 ### Chores
 - add CODEOWNERS (#28) (9397cac)
+- reduce changelog merge conflicts via gitattributes (3a5d451)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16
