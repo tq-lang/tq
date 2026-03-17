@@ -50,6 +50,7 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ steps.homebrew_tap_app_token.outputs.token }}
 
       - name: Attest release archives
+        if: ${{ vars.ENABLE_GITHUB_ATTESTATIONS == 'true' && !github.event.repository.private }}
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: |
