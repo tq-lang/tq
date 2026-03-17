@@ -25,13 +25,16 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test libraries with coverage
+      - name: Test libraries with coverage and race detector
         run: go test -v -race -coverprofile=lib.out ./internal/...
 
-      - name: Test CLI with integration coverage
+      - name: Test CLI (race detector, skip memory tests)
+        run: go test -v -race -short -count=1 ./cmd/tq
+
+      - name: Test CLI with integration coverage (includes memory tests)
         run: |
           mkdir -p .coverdata
-          GOCOVERDIR=$(pwd)/.coverdata go test -v -race -count=1 ./cmd/tq
+          GOCOVERDIR=$(pwd)/.coverdata go test -v -count=1 ./cmd/tq
 
       - name: Coverage report
         run: |

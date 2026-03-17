@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-17
+
+### Features
+- native TOON streaming with auto-detection and filter warnings (a40c2f8)
+
 ## 2026-03-16
 
 ### Features

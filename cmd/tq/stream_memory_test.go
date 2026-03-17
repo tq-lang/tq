@@ -70,7 +70,7 @@ func TestStreamMemory(t *testing.T) {
 
 	const (
 		elements = 550_000          // ~100 MB of JSON
-		rssLimit = 30 * 1024 * 1024 // 30 MB peak RSS ceiling
+		rssLimit = 50 * 1024 * 1024 // 50 MB peak RSS ceiling (covers coverage-instrumented binaries on Linux CI)
 	)
 
 	cmd := exec.Command(binaryPath, "--stream", "--json", "-c", ".")
@@ -135,7 +135,7 @@ func TestStreamMemoryTOON(t *testing.T) {
 
 	const (
 		elements = 550_000          // ~100 MB of TOON
-		rssLimit = 30 * 1024 * 1024 // 30 MB peak RSS ceiling
+		rssLimit = 50 * 1024 * 1024 // 50 MB peak RSS ceiling (covers coverage-instrumented binaries on Linux CI)
 	)
 
 	cmd := exec.Command(binaryPath, "--stream", "--json", "-c", ".")
