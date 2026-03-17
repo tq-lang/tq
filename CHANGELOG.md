@@ -4,6 +4,11 @@
 
 ### Build
 
+- publish tap formula to release branch only ([1a1f59a](https://github.com/tq-lang/tq/commit/1a1f59a71a91e5d3b695a2e9e32b1a5445bbb532))
+## [0.1.0-rc6](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc6) — 2026-03-17
+
+### Build
+
 - use dedicated branch for tap PR updates ([e608425](https://github.com/tq-lang/tq/commit/e60842587b7cf4dc3349e025aef8ac9421d21b71))
 ## [0.1.0-rc5](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc5) — 2026-03-17
 
