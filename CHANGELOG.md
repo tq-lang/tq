@@ -6,6 +6,9 @@
 - grouped help, --quiet flag, env/docs in help output (#19) (2947185)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
+### Fixes
+- make pre-commit and CI generation consistent (b810f9f)
+
 ### Build
 - bump actions/checkout from 4 to 6 (#15) (41d47be)
 - bump actions/setup-go from 5 to 6 (#13) (b857102)
