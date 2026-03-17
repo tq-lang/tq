@@ -47,6 +47,7 @@ make check
 
 `CHANGELOG.md` is generated from commit history and synced automatically on pushes to `main`.
 PR checks do not fail on changelog drift anymore, and contributors do not need to refresh `CHANGELOG.md` per PR.
+`CHANGELOG.md` uses a permissive merge strategy (`merge=union`) to avoid PR merge conflicts; the post-merge sync on `main` normalizes the file.
 
 If you want to preview the generated changelog locally:
 

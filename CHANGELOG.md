@@ -8,6 +8,7 @@
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
 
 ### Fixes
+- auto-sync changelog on main and drop PR stale check (#29) (3da6c20)
 - auto-sync changelog on main and drop PR stale check (1de97c5)
 
 ### Refactor
@@ -24,6 +25,7 @@
 - use GitHub App token for homebrew tap updates (5a3f325)
 
 ### Chores
+- add CODEOWNERS (#28) (9397cac)
 - version hooks and enforce changelog checks (#24) (47d16e2)
 
 ## 2026-03-16
