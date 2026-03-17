@@ -1,6 +1,6 @@
 # tq vs jq — Comparison and Migration Guide
 
-`tq` accepts the same filter language as `jq` (via gojq), accepts the same flags, and returns the same exit codes. The key addition is TOON output: a compact, human-readable format that reduces token count significantly — useful for LLM workflows and shell pipelines where JSON punctuation adds noise without value. See the [Known Differences from jq](#known-differences-from-jq) section for the small set of features that behave differently.
+`tq` accepts the same filter language as `jq` (via gojq) and returns the same exit codes. Most jq flags are available unchanged. The key addition is TOON output: a compact, human-readable format that reduces token count significantly — useful for LLM workflows and shell pipelines where JSON punctuation adds noise without value. See the [Known Differences from jq](#known-differences-from-jq) section for the small set of features that behave differently.
 
 ---
 
@@ -155,7 +155,7 @@ echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}' | tq --stream --json -c 'sele
 [["users",1,"name"],"Bob"]
 ```
 
-**TOON input** with `--stream` loads the full document into memory and applies `tostream` internally — there is no O(depth) guarantee for TOON. If you need memory-efficient streaming, convert TOON to JSON first or use a JSON source:
+**TOON input** with `--stream` also uses native token streaming and runs in O(depth) memory:
 
 ```tq
 printf 'name: Alice\nage: 30\n' | tq --stream --json -c '.'
@@ -184,8 +184,8 @@ Use `--stream` when processing large JSON or TOON files with O(depth) memory.
 | `-e` | Exit 4 when filter produces no output |
 | `-j` | Join output: no newline between values |
 | `-f file` | Read filter from file |
-| `--arg name value` | Bind a string variable (see note below) |
-| `--argjson name value` | Bind a JSON variable |
+| `--arg name --arg value` | Bind a string variable (see note below) |
+| `--argjson name --argjson value` | Bind a JSON variable |
 | `--stream` | Output path-value pairs for streaming |
 
 **tq-specific flags:**

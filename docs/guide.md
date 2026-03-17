@@ -530,8 +530,9 @@ echo '{"users":[{"name":"Alice","dept":"eng"},{"name":"Bob","dept":"sales"},{"na
 [2]: Alice,Carol
 ```
 
-`--argjson name value` parses the value as JSON, so numbers, booleans, and
-objects remain their correct types:
+`--argjson` also uses repeated flags (`--argjson name --argjson value`) and
+parses the value as JSON, so numbers, booleans, and objects remain their
+correct types:
 
 ```tq
 tq -n --argjson limit --argjson 5 '[range($limit)]'

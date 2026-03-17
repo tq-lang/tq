@@ -30,9 +30,13 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers. All complaints will be reviewed and
-investigated and will result in a response that is deemed necessary and
-appropriate to the circumstances.
+reported to the project maintainers at:
+https://github.com/tq-lang/tq/issues/new/choose
+
+If the report is sensitive, submit minimal details and request a private
+follow-up channel. All complaints will be reviewed and investigated and will
+result in a response that is deemed necessary and appropriate to the
+circumstances.
 
 ## Attribution
 

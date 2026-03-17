@@ -28,10 +28,11 @@ changelog:
       - "^docs:"
       - "^ci:"
 
-homebrew_casks:
+brews:
   - repository:
       owner: tq-lang
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/tq-lang/tq
     description: "Command-line TOON/JSON processor — jq for TOON"
+    license: MIT
