@@ -22,6 +22,7 @@
 ### CI
 - run changelog verification only on pull requests (#26) (091067f)
 - use GitHub App token for homebrew tap updates (#31) (b0d248d)
+- use GitHub App token for homebrew tap updates (#32) (9437b36)
 
 ### Chores
 - add CODEOWNERS (#28) (9397cac)
