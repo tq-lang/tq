@@ -10,9 +10,9 @@ Use a phased supply-chain hardening approach:
 
 1. **Immediate (implemented now):**
    - Pin all GitHub Actions in CI/release workflows to immutable commit SHAs.
-2. **Next phase (tracked work):**
-   - Add SBOM generation for release artifacts.
-   - Add provenance attestation for release artifacts.
+2. **Next phase (implemented):**
+   - Generate and publish SBOMs for release archives.
+   - Generate provenance attestations for release archives.
 
 ## Context
 
@@ -20,10 +20,9 @@ Unpinned action tags can move over time and introduce unexpected changes into
 CI/release pipelines. For public open-source releases, reproducibility and
 traceability are important for maintainer confidence and downstream trust.
 
-At the same time, introducing SBOM and provenance requires tool and process
-choices (format, attachment location, verification workflow). We apply the
-minimum high-value control now (SHA pinning), then complete SBOM/provenance as
-follow-up work.
+SBOM and provenance required additional tool/process choices (format, upload
+location, verification workflow). We implemented SHA pinning first, then
+completed SBOM/provenance in the next phase.
 
 ## Consequences
 
@@ -36,9 +35,9 @@ follow-up work.
 ### Trade-offs
 
 - Action updates require manual SHA refreshes.
-- SBOM/provenance are not yet published with releases.
+- Release archives now include published SPDX SBOMs.
+- Release archives now have GitHub provenance attestations.
 
 ## Follow-Up
 
-- Add SBOM generation and publication to release pipeline.
-- Add provenance attestation generation and publication to release pipeline.
+- Keep SBOM/provenance verification docs current with release workflow changes.

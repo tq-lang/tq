@@ -102,6 +102,7 @@ Releases are automated via GoReleaser on tag push. The Homebrew formula is publi
 After this, any `v*` tag push will build binaries, create a GitHub release, and update the Homebrew formula.
 
 Release hardening policy (action SHA pinning now, SBOM/provenance phased in) is documented in [docs/adr-002-release-supply-chain.md](docs/adr-002-release-supply-chain.md).
+Consumer verification steps for release SBOMs and provenance attestations are documented in [docs/release-verification.md](docs/release-verification.md).
 
 ## Reporting Issues
 

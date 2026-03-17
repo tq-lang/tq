@@ -3,11 +3,9 @@
 ## 2026-03-17
 
 ### Features
+- add SBOM publishing and provenance attestations (51605e3)
 - grouped help, --quiet flag, env/docs in help output (#19) (2947185)
 - native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
-
-### Fixes
-- ignore chore(changelog) commits in generator (cad0b9b)
 
 ### Refactor
 - split main into focused modules (#25) (c3c2976)
@@ -19,7 +17,7 @@
 - bump goreleaser/goreleaser-action from 6 to 7 (#14) (84c9fd7)
 
 ### CI
-- run changelog verification only on pull requests (92d8436)
+- run changelog verification only on pull requests (#26) (091067f)
 
 ### Chores
 - version hooks and enforce changelog checks (#24) (47d16e2)
