@@ -134,6 +134,7 @@ func openFileReader(filename string) (io.Reader, func(), int) {
 	if filename == "-" {
 		return os.Stdin, func() {}, 0
 	}
+	// #nosec G304 -- tq intentionally opens user-provided CLI file paths.
 	fh, err := os.Open(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tq: %v\n", err)
