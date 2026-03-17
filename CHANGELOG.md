@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.1.0-rc1](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc1) — 2026-03-17
 
 ### Build
 
+- remove invalid GoReleaser release_notes_file setting ([017cc44](https://github.com/tq-lang/tq/commit/017cc4479f00e38503e09c8adcb5690472bb0b58))
 - replace changelog shell script with git-cliff ([09dd0ce](https://github.com/tq-lang/tq/commit/09dd0ce10efdbde9b646d7620bc9d026655fdd8e))
 - bump actions/setup-go from 5 to 6 ([#13](https://github.com/tq-lang/tq/pull/13)) ([b857102](https://github.com/tq-lang/tq/commit/b85710294337cc58a06b124804ced343976dab30))
 - bump goreleaser/goreleaser-action from 6 to 7 ([#14](https://github.com/tq-lang/tq/pull/14)) ([84c9fd7](https://github.com/tq-lang/tq/commit/84c9fd71e16ed9cab038b238573a8a0ad20c62cf))
