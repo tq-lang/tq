@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 # Generate CHANGELOG.md from git log using Conventional Commits format.
 # Groups entries by date, then by commit type.
+#
+# Note: this script intentionally excludes HEAD when possible. It is run by
+# pre-commit before the new commit exists, so the changelog naturally lags by
+# one commit and is finalized on the next commit.
 
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
+LOG_REF="HEAD~1"
+
+if ! git rev-parse --verify "$LOG_REF" >/dev/null 2>&1; then
+  LOG_REF="HEAD"
+fi
 
 # Map conventional commit types to section headers
 type_label() {
@@ -62,7 +71,7 @@ type_order() {
       # Collect entries per date+section
       echo "${date}|${label}|$(type_order "$label")|${description}|${short_hash}"
     fi
-  done < <(git log --pretty=format:"%ad%x09%H%x09%s" --date=short) |
+  done < <(git log "$LOG_REF" --pretty=format:"%ad%x09%H%x09%s" --date=short) |
   sort -t'|' -k1,1r -k3,3n |
   while IFS='|' read -r date label _order description short_hash; do
     if [[ "$date" != "$current_date" ]]; then
