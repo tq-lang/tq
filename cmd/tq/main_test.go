@@ -150,6 +150,14 @@ func TestCLI(t *testing.T) {
 		{"stream sort warning", `{}`, []string{"--stream", "--json", "-c", "select(false) | sort"}, 0, "", "warning: 'sort'"},
 		{"stream sort_by warning", `{}`, []string{"--stream", "--json", "-c", "select(false) | sort_by(.x)"}, 0, "", "warning: 'sort_by'"},
 
+		// Quiet mode
+		{"quiet suppresses warning", `{}`, []string{"--stream", "--quiet", "--json", "-c", "select(false) | sort"}, 0, "", ""},
+
+		// Help output
+		{"help shows groups", "", []string{"--help"}, 0, "", "Output flags:"},
+		{"help shows env", "", []string{"--help"}, 0, "", "TQ_STREAM_THRESHOLD"},
+		{"help shows docs link", "", []string{"--help"}, 0, "", "github.com/tq-lang/tq"},
+
 		// Errors
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},
 		{"runtime error", `42`, []string{".foo"}, 5, "", "expected an object"},
@@ -287,6 +295,20 @@ func TestCLIWithFiles(t *testing.T) {
 		}
 		if !strings.Contains(errBuf.String(), "streaming enabled") {
 			t.Errorf("expected auto-stream via env var, got stderr %q", errBuf.String())
+		}
+	})
+
+	t.Run("quiet suppresses auto-stream info", func(t *testing.T) {
+		f := filepath.Join(tmp, "small4.json")
+		if err := os.WriteFile(f, []byte(`{"a":1}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		_, stderr, code := runTQ(t, "", "--quiet", "--stream-threshold", "1B", "--json", "-c", ".", f)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0", code)
+		}
+		if strings.Contains(stderr, "streaming enabled") {
+			t.Errorf("--quiet should suppress auto-stream info, got stderr %q", stderr)
 		}
 	})
 }

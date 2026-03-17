@@ -3,7 +3,13 @@
 ## 2026-03-17
 
 ### Features
-- native TOON streaming with auto-detection and filter warnings (a40c2f8)
+- native TOON streaming with auto-detection and filter warnings (#18) (528b8e5)
+
+### Build
+- bump actions/checkout from 4 to 6 (#15) (41d47be)
+- bump actions/setup-go from 5 to 6 (#13) (b857102)
+- bump golangci/golangci-lint-action from 6 to 9 (#16) (a06d964)
+- bump goreleaser/goreleaser-action from 6 to 7 (#14) (84c9fd7)
 
 ## 2026-03-16
 
@@ -12,7 +18,6 @@
 
 ### CI
 - add Dependabot for GitHub Actions and Go modules (#12) (1e5acd6)
-- add Dependabot for GitHub Actions and Go modules (9cc6c51)
 
 ## 2026-03-13
 
