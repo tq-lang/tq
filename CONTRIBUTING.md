@@ -45,7 +45,10 @@ make check
 
 ### Changelog Workflow
 
-`CHANGELOG.md` is enforced in CI on pull requests. Generate it locally before opening or updating a PR:
+`CHANGELOG.md` is generated from commit history and synced automatically on pushes to `main`.
+PR checks do not fail on changelog drift anymore, and contributors do not need to refresh `CHANGELOG.md` per PR.
+
+If you want to preview the generated changelog locally:
 
 ```bash
 make generate-changelog
