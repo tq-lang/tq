@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## [0.1.0-rc3](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc3) — 2026-03-17
+
+### Build
+
+- use unique SBOM artifact names ([19125aa](https://github.com/tq-lang/tq/commit/19125aaebbf8417d0fabde1bdf5307c2f5ae395c))
+## [0.1.0-rc2](https://github.com/tq-lang/tq/releases/tag/v0.1.0-rc2) — 2026-03-17
 
 ### CI
 
