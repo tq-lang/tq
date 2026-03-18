@@ -101,8 +101,8 @@ func printUsage() {
 tq is a command-line TOON/JSON processor. Like jq, but for TOON.
 
 Examples:
-  echo 'name Alice' | tq '.name'                  # field access
-  echo 'a 1' | tq --json '.'                      # convert to JSON
+  echo 'name: Alice' | tq '.name'                 # field access
+  echo 'a: 1' | tq --json '.'                     # convert to JSON
   cat data.toon | tq '.users[] | .name'            # iterate array
   tq -n '1 + 1'                                    # null input
   tq '.key' file1.json file2.toon                  # multiple files

@@ -157,7 +157,7 @@ func TestCLI(t *testing.T) {
 		{"help shows groups", "", []string{"--help"}, 0, "Output flags:", ""},
 		{"help shows env", "", []string{"--help"}, 0, "TQ_STREAM_THRESHOLD", ""},
 		{"help shows docs link", "", []string{"--help"}, 0, "github.com/tq-lang/tq", ""},
-		{"help examples use toon", "", []string{"--help"}, 0, "echo 'name Alice'", ""},
+		{"help examples use toon", "", []string{"--help"}, 0, "echo 'name: Alice'", ""},
 		{"help to stdout", "", []string{"--help"}, 0, "Usage: tq", ""},
 
 		// --arg edge cases

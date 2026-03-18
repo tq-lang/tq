@@ -94,8 +94,8 @@ Use `-` as a file argument to read from stdin explicitly (e.g. `tq '.key' -`).
 | `--indent N` | Set indentation width |
 | `--delimiter` | TOON output delimiter: `comma`, `tab`, `pipe` |
 | `--stream` | Output path-value pairs for streaming |
-| `--arg NAME --arg VALUE` | Pass a string variable to the filter |
-| `--argjson NAME --argjson VALUE` | Pass a JSON variable to the filter |
+| `--arg NAME VALUE` | Pass a string variable to the filter |
+| `--argjson NAME VALUE` | Pass a JSON variable to the filter |
 | `-f`, `--from-file` | Read filter from file |
 | `--version` | Print version |
 | `-h`, `--help` | Show help with examples |
