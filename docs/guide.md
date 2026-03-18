@@ -510,14 +510,13 @@ echo '{"price":"42.50"}' | tq '.price | tonumber'
 
 ## 8. Variables and Shell Integration
 
-`--arg` injects a shell string as a jq variable. tq uses the flag twice — once
-for the name and once for the value: `--arg name --arg value`. This differs from
-jq's single-flag form `--arg name value`.
+`--arg` injects a shell string as a jq variable using `--arg name value`
+(two positional arguments after the flag), matching jq's syntax exactly.
 
 Pass a string variable and use it in a filter:
 
 ```tq
-tq -n --arg greeting --arg Hello '$greeting'
+tq -n --arg greeting Hello '$greeting'
 # output
 Hello
 ```
@@ -525,23 +524,22 @@ Hello
 Use a variable to parameterise a filter at runtime:
 
 ```tq
-echo '{"users":[{"name":"Alice","dept":"eng"},{"name":"Bob","dept":"sales"},{"name":"Carol","dept":"eng"}]}' | tq --arg dept --arg eng '[.users[] | select(.dept == $dept) | .name]'
+echo '{"users":[{"name":"Alice","dept":"eng"},{"name":"Bob","dept":"sales"},{"name":"Carol","dept":"eng"}]}' | tq --arg dept eng '[.users[] | select(.dept == $dept) | .name]'
 # output
 [2]: Alice,Carol
 ```
 
-`--argjson` also uses repeated flags (`--argjson name --argjson value`) and
-parses the value as JSON, so numbers, booleans, and objects remain their
-correct types:
+`--argjson` works the same way (`--argjson name value`) and parses the value
+as JSON, so numbers, booleans, and objects remain their correct types:
 
 ```tq
-tq -n --argjson limit --argjson 5 '[range($limit)]'
+tq -n --argjson limit 5 '[range($limit)]'
 # output
 [5]: 0,1,2,3,4
 ```
 
 ```tq
-tq -n --argjson config --argjson '{"limit":10,"debug":false}' '$config.limit'
+tq -n --argjson config '{"limit":10,"debug":false}' '$config.limit'
 # output
 10
 ```

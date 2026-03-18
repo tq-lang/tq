@@ -106,9 +106,9 @@ func TestCLI(t *testing.T) {
 		{"delimiter tab", `[1,2,3]`, []string{"--delimiter", "tab", "."}, 0, "\t", ""},
 		{"delimiter pipe", `[1,2,3]`, []string{"--delimiter", "pipe", "."}, 0, "|", ""},
 
-		// Variables
-		{"arg variable", "null", []string{"-n", "--arg", "name", "--arg", "Alice", "$name"}, 0, "Alice", ""},
-		{"argjson variable", "null", []string{"-n", "--json", "-c", "--argjson", "data", "--argjson", `{"k":"v"}`, "$data"}, 0, `{"k":"v"}`, ""},
+		// Variables (jq-style: --arg NAME VALUE)
+		{"arg variable", "null", []string{"-n", "--arg", "name", "Alice", "$name"}, 0, "Alice", ""},
+		{"argjson variable", "null", []string{"-n", "--json", "-c", "--argjson", "data", `{"k":"v"}`, "$data"}, 0, `{"k":"v"}`, ""},
 
 		// Exit status
 		{"exit status with output", `{"a":1}`, []string{"-e", "."}, 0, "a", ""},
@@ -153,10 +153,20 @@ func TestCLI(t *testing.T) {
 		// Quiet mode
 		{"quiet suppresses warning", `{}`, []string{"--stream", "--quiet", "--json", "-c", "select(false) | sort"}, 0, "", ""},
 
-		// Help output
-		{"help shows groups", "", []string{"--help"}, 0, "", "Output flags:"},
-		{"help shows env", "", []string{"--help"}, 0, "", "TQ_STREAM_THRESHOLD"},
-		{"help shows docs link", "", []string{"--help"}, 0, "", "github.com/tq-lang/tq"},
+		// Help output (stdout)
+		{"help shows groups", "", []string{"--help"}, 0, "Output flags:", ""},
+		{"help shows env", "", []string{"--help"}, 0, "TQ_STREAM_THRESHOLD", ""},
+		{"help shows docs link", "", []string{"--help"}, 0, "github.com/tq-lang/tq", ""},
+		{"help examples use toon", "", []string{"--help"}, 0, "echo 'name Alice'", ""},
+		{"help to stdout", "", []string{"--help"}, 0, "Usage: tq", ""},
+
+		// --arg edge cases
+		{"arg jq style", "null", []string{"-n", "--arg", "x", "hello", "$x"}, 0, "hello", ""},
+		{"argjson jq style", "null", []string{"-n", "--json", "-c", "--argjson", "d", `[1,2]`, "$d"}, 0, "[1,2]", ""},
+		{"arg missing value", "null", []string{"-n", "--arg", "name"}, 2, "", ""},
+
+		// Version format
+		{"version format", "", []string{"--version"}, 0, "tq dev", ""},
 
 		// Errors
 		{"invalid filter", `{}`, []string{".[invalid|||"}, 3, "", "parse error"},
