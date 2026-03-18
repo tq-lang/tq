@@ -155,16 +155,16 @@ func parseSize(s string) (int64, error) {
 }
 
 // formatSize returns a human-readable size string.
-func formatSize(bytes int64) string {
+func formatSize(n int64) string {
 	switch {
-	case bytes >= 1024*1024*1024:
-		return fmt.Sprintf("%dGB", bytes/(1024*1024*1024))
-	case bytes >= 1024*1024:
-		return fmt.Sprintf("%dMB", bytes/(1024*1024))
-	case bytes >= 1024:
-		return fmt.Sprintf("%dKB", bytes/1024)
+	case n >= 1024*1024*1024:
+		return fmt.Sprintf("%dGB", n/(1024*1024*1024))
+	case n >= 1024*1024:
+		return fmt.Sprintf("%dMB", n/(1024*1024))
+	case n >= 1024:
+		return fmt.Sprintf("%dKB", n/1024)
 	default:
-		return fmt.Sprintf("%dB", bytes)
+		return fmt.Sprintf("%dB", n)
 	}
 }
 

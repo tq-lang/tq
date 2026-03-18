@@ -11,27 +11,99 @@ linters:
     - misspell
     - unconvert
     - unparam
+    # Added: catch logic bugs, suspicious conditions, shadowed vars
+    - gocritic      # diagnostic + style + performance checks
+    - errorlint     # require %w wrapping, correct error comparisons
+    - nilerr        # returning nil when err is non-nil
+    - reassign      # detect reassignment of function parameters
+    - wastedassign  # detect wasted assignments
+    # Type safety
+    - forcetypeassert # catch type assertions without comma-ok
+    - exhaustive      # catch missing enum switch cases
+    - errchkjson      # catch unchecked json marshal/unmarshal errors
+    # Performance
+    - perfsprint    # flag fmt.Sprintf replaceable by strconv
+    # Code hygiene
+    - forbidigo     # ban specific dangerous function calls
+    - nolintlint    # require explanation + specific linter on //nolint
+    # HTTP safety
+    - bodyclose     # check HTTP response bodies are closed
+    # Security
+    - asciicheck    # reject non-ASCII identifiers
+    - bidichk       # reject bidi Unicode control chars (Trojan Source)
+    # Correctness
+    - copyloopvar   # flag unnecessary Go <1.22 loop var copies
+    - durationcheck # catch duration*duration multiplication bugs
+    - errname       # enforce ErrFoo/FooError naming convention
+    - makezero      # catch make([]T, n) + append bug
+    # Style / readability
+    - goconst       # find repeated magic strings → constants
+    - nakedret      # flag naked returns in long functions
+    - usestdlibvars # use stdlib constants instead of magic values
+    - whitespace    # remove stray blank lines in function bodies
+    # Go 1.22+
+    - intrange      # use range-over-integer syntax
+    - mirror        # avoid needless string↔byte conversions
+    # Testing
+    - tparallel     # catch incorrect t.Parallel() in subtests
+    # Duplication / maintainability
+    - dupl          # detect copy-pasted code blocks
+    - maintidx      # maintainability index (complexity + LOC + Halstead)
+    # Function / file size
+    - funlen        # max lines and statements per function
 
   settings:
     errcheck:
-      check-type-assertions: false
+      check-type-assertions: true
     gocyclo:
-      min-complexity: 30
+      min-complexity: 10
+    gocritic:
+      enabled-tags:
+        - diagnostic   # suspicious code patterns, shadowed vars
+        - style        # idiomatic Go
+        - performance  # allocation/copy issues
+      disabled-checks:
+        - hugeParam        # too noisy for small structs passed by value
+        - rangeValCopy     # noisy, compiler optimises most cases
+        - ifElseChain      # stylistic, not a bug
+        - unnamedResult    # too strict for small functions
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
     revive:
       rules:
         - name: exported
           disabled: true
         - name: package-comments
           disabled: true
+    dupl:
+      threshold: 75
+    funlen:
+      lines: 60
+      statements: 40
+    forbidigo:
+      analyze-types: true
+    maintidx:
+      under: 20
+    nolintlint:
+      require-explanation: true
+      require-specific: true
 
   exclusions:
     generated: strict
     rules:
-      # Test files: suppress gosec and errcheck noise.
+      # Test files: suppress gosec, errcheck, gocritic, errorlint, goconst noise.
       - path: _test\.go
         linters:
           - gosec
           - errcheck
+          - gocritic
+          - errorlint
+          - forcetypeassert
+          - goconst
+          - dupl
+          - funlen
       # CLI tool intentionally opens user-provided files.
       - linters:
           - gosec

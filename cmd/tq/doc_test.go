@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -29,6 +30,7 @@ type docExample struct {
 const docExecTimeout = 10 * time.Second
 
 func TestDocs(t *testing.T) {
+	t.Parallel()
 	docsDir := findDocsDir(t)
 	if docsDir == "" {
 		t.Skip("docs directory not found")
@@ -53,7 +55,6 @@ func TestDocs(t *testing.T) {
 	}
 
 	for _, ex := range examples {
-		ex := ex
 		name := fmt.Sprintf("%s:%d", filepath.Base(ex.file), ex.lineNumber)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -307,7 +308,7 @@ func parseHeredoc(lines []string, start int) (string, string, int, error) {
 		body = append(body, lines[i])
 	}
 	if i >= len(lines) {
-		return "", "", 0, fmt.Errorf("heredoc missing closing EOF")
+		return "", "", 0, errors.New("heredoc missing closing EOF")
 	}
 
 	return filename, strings.Join(body, "\n") + "\n", i - start, nil
@@ -338,9 +339,21 @@ func parsePipeline(line string) ([][]string, error) {
 		cmds = append(cmds, args)
 	}
 	if len(cmds) == 0 {
-		return nil, fmt.Errorf("empty pipeline")
+		return nil, errors.New("empty pipeline")
 	}
 	return cmds, nil
+}
+
+// shellSplitter holds state for splitting a shell-like string.
+type shellSplitter struct {
+	sep         rune
+	stripQuotes bool
+	inSingle    bool
+	inDouble    bool
+	escaped     bool
+	hasContent  bool
+	current     strings.Builder
+	parts       []string
 }
 
 // splitShell splits s on unquoted occurrences of the separator rune.
@@ -348,74 +361,91 @@ func parsePipeline(line string) ([][]string, error) {
 // When sep is '|', it splits a pipeline; when sep is ' ', it splits arguments.
 // stripQuotes controls whether quote characters are removed from the output.
 func splitShell(s string, sep rune, stripQuotes bool) []string {
-	var parts []string
-	var current strings.Builder
-	inSingle := false
-	inDouble := false
-	escaped := false
-	hasContent := false
-
+	sp := &shellSplitter{sep: sep, stripQuotes: stripQuotes}
 	for _, ch := range s {
-		if escaped {
-			current.WriteRune(ch)
-			escaped = false
-			hasContent = true
-			continue
-		}
-		if ch == '\\' && !inSingle {
-			escaped = true
-			if !stripQuotes {
-				current.WriteRune(ch)
-			}
-			continue
-		}
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-			hasContent = true
-			if !stripQuotes {
-				current.WriteRune(ch)
-			}
-			continue
-		}
-		if ch == '"' && !inSingle {
-			inDouble = !inDouble
-			hasContent = true
-			if !stripQuotes {
-				current.WriteRune(ch)
-			}
-			continue
-		}
-		if ch == sep && !inSingle && !inDouble {
-			// For whitespace splitting, collapse consecutive separators.
-			if sep == ' ' || sep == '\t' {
-				if hasContent {
-					parts = append(parts, current.String())
-					current.Reset()
-					hasContent = false
-				}
-				continue
-			}
-			parts = append(parts, current.String())
-			current.Reset()
-			hasContent = false
-			continue
-		}
-		// Treat tab as space for argument splitting.
-		if (ch == ' ' || ch == '\t') && sep == ' ' && !inSingle && !inDouble {
-			if hasContent {
-				parts = append(parts, current.String())
-				current.Reset()
-				hasContent = false
-			}
-			continue
-		}
-		current.WriteRune(ch)
-		hasContent = true
+		sp.processRune(ch)
 	}
-	if hasContent || sep == '|' {
-		parts = append(parts, current.String())
+	if sp.hasContent || sep == '|' {
+		sp.parts = append(sp.parts, sp.current.String())
 	}
-	return parts
+	return sp.parts
+}
+
+func (sp *shellSplitter) processRune(ch rune) {
+	if sp.escaped {
+		sp.current.WriteRune(ch)
+		sp.escaped = false
+		sp.hasContent = true
+		return
+	}
+	if sp.handleSpecial(ch) {
+		return
+	}
+	sp.current.WriteRune(ch)
+	sp.hasContent = true
+}
+
+// handleSpecial processes escape, quote, and separator characters.
+// Returns true if the character was handled.
+func (sp *shellSplitter) handleSpecial(ch rune) bool {
+	if ch == '\\' && !sp.inSingle {
+		sp.escaped = true
+		if !sp.stripQuotes {
+			sp.current.WriteRune(ch)
+		}
+		return true
+	}
+	if sp.toggleQuote(ch) {
+		return true
+	}
+	if sp.isSeparator(ch) {
+		sp.emitPart()
+		return true
+	}
+	return false
+}
+
+// toggleQuote toggles single/double quote state if ch is a quote character
+// in the correct context. Returns true if a quote was toggled.
+func (sp *shellSplitter) toggleQuote(ch rune) bool {
+	if ch == '\'' && !sp.inDouble {
+		sp.inSingle = !sp.inSingle
+	} else if ch == '"' && !sp.inSingle {
+		sp.inDouble = !sp.inDouble
+	} else {
+		return false
+	}
+	sp.hasContent = true
+	if !sp.stripQuotes {
+		sp.current.WriteRune(ch)
+	}
+	return true
+}
+
+func (sp *shellSplitter) isSeparator(ch rune) bool {
+	if sp.inSingle || sp.inDouble {
+		return false
+	}
+	if ch == sp.sep {
+		return true
+	}
+	// Treat tab as space for argument splitting.
+	return (ch == ' ' || ch == '\t') && sp.sep == ' '
+}
+
+func (sp *shellSplitter) emitPart() {
+	isWhitespaceSep := sp.sep == ' ' || sp.sep == '\t'
+	if isWhitespaceSep {
+		if sp.hasContent {
+			sp.parts = append(sp.parts, sp.current.String())
+			sp.current.Reset()
+			sp.hasContent = false
+		}
+		return
+	}
+	sp.parts = append(sp.parts, sp.current.String())
+	sp.current.Reset()
+	sp.hasContent = false
 }
 
 // splitPipe splits a command line on unquoted pipe characters.

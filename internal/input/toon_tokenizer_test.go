@@ -277,7 +277,7 @@ func TestTOONTokenReader_ConstantMemory(t *testing.T) {
 }
 
 func BenchmarkStreamJSON(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		tr := NewTokenReader(newNestedArrayReader(35_000))
 		for {
 			_, ok, err := tr.Next()
@@ -292,7 +292,7 @@ func BenchmarkStreamJSON(b *testing.B) {
 }
 
 func BenchmarkStreamTOON(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		tr := NewTOONTokenReader(newTOONArrayReader(35_000))
 		for {
 			_, ok, err := tr.Next()
