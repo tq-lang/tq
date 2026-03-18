@@ -11,7 +11,11 @@ func run() int {
 	cfg, args := parseFlags()
 
 	if cfg.version {
-		fmt.Println("tq " + version)
+		if commit != "unknown" || date != "unknown" {
+			fmt.Printf("tq %s (%s, %s)\n", version, commit, date)
+		} else {
+			fmt.Println("tq " + version)
+		}
 		return exitOK
 	}
 

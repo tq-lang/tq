@@ -490,10 +490,8 @@ tq -s 'map({name, replicas}) | sort_by(.replicas) | reverse' svc-web.toon svc-ap
 
 Construct an object from command-line variables using `-n` and `--arg`:
 
-> **Note:** tq uses `--arg name --arg value` (two flags per variable), unlike jq which uses `--arg name value` (one flag with two arguments).
-
 ```tq
-tq -n --arg env --arg production --arg version --arg "2.1.3" '{env: $env, version: $version, deployedAt: "2024-03-01"}'
+tq -n --arg env production --arg version "2.1.3" '{env: $env, version: $version, deployedAt: "2024-03-01"}'
 # output
 deployedAt: 2024-03-01
 env: production
@@ -514,7 +512,7 @@ tq -n '[range(1;4) | {id: ., name: ("user-" + (. | tostring)), active: true}]'
 Attach a structured JSON object to existing data with `--argjson`:
 
 ```tq
-echo '{"name":"web","replicas":3}' | tq --argjson limits --argjson '{"cpu":"500m","memory":"256Mi"}' '. + {limits: $limits}'
+echo '{"name":"web","replicas":3}' | tq --argjson limits '{"cpu":"500m","memory":"256Mi"}' '. + {limits: $limits}'
 # output
 limits:
   cpu: 500m
@@ -526,7 +524,7 @@ replicas: 3
 Enrich a TOON document with a runtime variable:
 
 ```tq
-printf 'name: web\nreplicas: 3\nstatus: healthy' | tq --arg region --arg "us-east-1" '. + {region: $region}'
+printf 'name: web\nreplicas: 3\nstatus: healthy' | tq --arg region "us-east-1" '. + {region: $region}'
 # output
 name: web
 region: us-east-1

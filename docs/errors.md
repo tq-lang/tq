@@ -322,18 +322,18 @@ tq: --json and --toon are mutually exclusive
 
 ### Missing flag value (`--arg`)
 
-`--arg` requires a name and a value as two separate flag invocations.
+`--arg` requires a name and a value as two positional arguments.
 
 ```tq
-echo '{}' | tq --arg name '$name'
+echo '{}' | tq --arg name
 # output error (exit: 2)
-tq: --arg requires pairs of name and value
+tq: --arg requires NAME and VALUE arguments
 ```
 
-**Fix:** provide both name and value: `--arg name --arg Alice`.
+**Fix:** provide both name and value: `--arg name Alice`.
 
 ```tq
-echo '{}' | tq --arg name --arg Alice '"Hello, " + $name'
+echo '{}' | tq --arg name Alice '"Hello, " + $name'
 # output
 "Hello, Alice"
 ```
@@ -341,15 +341,15 @@ echo '{}' | tq --arg name --arg Alice '"Hello, " + $name'
 ### Invalid JSON value for `--argjson`
 
 ```tq
-echo '{}' | tq --argjson val --argjson 'notjson' '$val'
+echo '{}' | tq --argjson val 'notjson' '$val'
 # output error (exit: 2)
 tq: --argjson value for "val" is not valid JSON: invalid character 'o' in literal null (expecting 'u')
 ```
 
-**Fix:** supply valid JSON: `--argjson val --argjson '42'` or `--argjson val --argjson '{"x":1}'`.
+**Fix:** supply valid JSON: `--argjson val '42'` or `--argjson val '{"x":1}'`.
 
 ```tq
-echo '{}' | tq --argjson val --argjson '42' '$val + 1'
+echo '{}' | tq --argjson val '42' '$val + 1'
 # output
 43
 ```
@@ -511,7 +511,7 @@ This is useful for defensive pipelines, but be careful — the output is now a s
 | `tq: parse error: unterminated string literal` | Missing closing `"` in filter | Add the closing `"` |
 | `tq: parse error: unexpected token ";"` | Semicolon used as separator | Use `,` (multi-output) or `\|` (pipe) |
 | `tq: compile error: function not defined: foo/1` | Calling a nonexistent built-in | Check spelling or define the function with `def` |
-| `tq: compile error: variable not defined: $x` | Using `$x` without binding it | Add `--arg x --arg value` or bind with `as` |
+| `tq: compile error: variable not defined: $x` | Using `$x` without binding it | Add `--arg x value` or bind with `as` |
 | `tq: cannot iterate over: null` | `.field[]` where `.field` is null | Use `[]?` or `(.field // []) \| .[]` |
 | `tq: cannot iterate over: boolean (true)` | `.[]` on a boolean | Check type first; iterate the correct field |
 | `tq: expected an object but got: number (42)` | `.field` access on non-object | Check input type; use correct path |
@@ -523,7 +523,7 @@ This is useful for defensive pipelines, but be careful — the output is now a s
 | `tq: open file.json: no such file or directory` | Input file missing | Check path; use `-` for stdin |
 | `tq: open filter.jq: no such file or directory` | `-f` filter file missing | Fix path or pass filter inline |
 | `tq: unknown delimiter "x" (use comma, tab, or pipe)` | Invalid `--delimiter` value | Use `comma`, `tab`, or `pipe` |
-| `tq: --arg requires pairs of name and value` | Odd number of `--arg` tokens | Each variable needs a name and a value |
-| `tq: --argjson value for "x" is not valid JSON: …` | Value is not valid JSON | Pass valid JSON: `--argjson x --argjson '42'` |
+| `tq: --arg requires NAME and VALUE arguments` | Missing name or value after `--arg` | Each variable needs a name and a value |
+| `tq: --argjson value for "x" is not valid JSON: …` | Value is not valid JSON | Pass valid JSON: `--argjson x '42'` |
 | `tq: --json and --toon are mutually exclusive` | Both output flags set | Use one or neither |
 | *(exit 4, no output)* | `--exit-status` with no filter output | Fix the filter, or drop `-e` if empty output is fine |

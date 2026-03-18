@@ -11,7 +11,11 @@ const (
 	exitRuntime  = 5 // jq filter runtime error
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
 
 func main() {
 	os.Exit(run())

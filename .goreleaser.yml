@@ -4,7 +4,7 @@ builds:
   - main: ./cmd/tq
     binary: tq
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
     goos:
       - linux
       - darwin

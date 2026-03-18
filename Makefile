@@ -3,7 +3,7 @@ VERSION ?= dev
 .PHONY: build test test-docs lint check cover clean changelog check-changelog
 
 build:
-	go build -ldflags "-X main.version=$(VERSION)" -o tq ./cmd/tq
+	go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(shell git rev-parse --short HEAD) -X main.date=$(shell date -u +%Y-%m-%d)" -o tq ./cmd/tq
 
 test:
 	go test -v ./...

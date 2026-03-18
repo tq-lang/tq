@@ -559,7 +559,7 @@ printf 'users[2]{name,age}:\n  Alice,30\n  Bob,25' | tq --delimiter tab '.users'
 Pass a string variable with `--arg`:
 
 ```tq
-echo 'null' | tq --arg name --arg Alice '$name'
+echo 'null' | tq --arg name Alice '$name'
 # output
 Alice
 ```
@@ -567,7 +567,7 @@ Alice
 Use a variable in a filter:
 
 ```tq
-printf 'users[2]{name,role}:\n  Alice,admin\n  Bob,user' | tq --arg role --arg admin '.users[] | select(.role == $role) | .name'
+printf 'users[2]{name,role}:\n  Alice,admin\n  Bob,user' | tq --arg role admin '.users[] | select(.role == $role) | .name'
 # output
 Alice
 ```
@@ -575,7 +575,7 @@ Alice
 Pass a structured JSON variable with `--argjson`:
 
 ```tq
-echo 'null' | tq --argjson threshold --argjson 80 'if $threshold > 50 then "above" else "below" end'
+echo 'null' | tq --argjson threshold 80 'if $threshold > 50 then "above" else "below" end'
 # output
 above
 ```

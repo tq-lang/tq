@@ -184,8 +184,8 @@ Use `--stream` when processing large JSON or TOON files with O(depth) memory.
 | `-e` | Exit 4 when filter produces no output |
 | `-j` | Join output: no newline between values |
 | `-f file` | Read filter from file |
-| `--arg name --arg value` | Bind a string variable (see note below) |
-| `--argjson name --argjson value` | Bind a JSON variable |
+| `--arg name value` | Bind a string variable |
+| `--argjson name value` | Bind a JSON variable |
 | `--stream` | Output path-value pairs for streaming |
 
 **tq-specific flags:**
@@ -223,10 +223,10 @@ tq -n '1 + 1'
 2
 ```
 
-String variable — note the syntax difference from jq: tq uses a repeated flag (`--arg name --arg value`) because flags accept one argument each, whereas jq uses `--arg name value`:
+String variable — tq uses the same syntax as jq (`--arg name value`):
 
 ```tq
-tq -n --arg name --arg Alice '$name'
+tq -n --arg name Alice '$name'
 # output
 Alice
 ```
