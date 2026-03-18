@@ -41,10 +41,13 @@ jobs:
           owner: tq-lang
           repositories: homebrew-tap
 
+      - name: Generate release notes
+        run: git-cliff --latest --strip header -o RELEASE_NOTES.md
+
       - uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes=RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ steps.homebrew_tap_app_token.outputs.token }}
