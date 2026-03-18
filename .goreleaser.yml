@@ -26,12 +26,8 @@ sboms:
       - spdx-json
 
 changelog:
-  use: git
-  filters:
-    exclude:
-      - "^chore:"
-      - "^docs:"
-      - "^ci:"
+  use: git-cliff
+  # git-cliff uses cliff.toml for config
 
 brews:
   - repository:
