@@ -5,7 +5,7 @@ description: "TDD dev-review loop: implement a feature/fix with automated review
 # Dev-Review Cycle
 
 Orchestrate a development loop: a developer subagent implements, then a
-reviewer subagent reviews. Loop until approved (max 3 iterations).
+reviewer subagent reviews. Loop until approved (max 5 iterations).
 
 ## Input
 
@@ -71,7 +71,7 @@ Read the reviewer's verdict.
 
 **If REQUEST CHANGES:**
 - Show the review findings to the user.
-- Ask: "The reviewer found issues. Want me to fix them and re-review? (iteration N/3)"
+- Ask: "The reviewer found issues. Want me to fix them and re-review? (iteration N/5)"
 - If yes, go back to Step 1 with the review findings added to the prompt.
 - If max iterations reached, report findings and stop.
 

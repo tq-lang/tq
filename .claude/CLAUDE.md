@@ -43,7 +43,7 @@ Three-layer system for structured development:
 - **`/tq-review`** — detailed code review with 10-point checklist
 - **`/tq-ship`** — check → commit → push → open PR
 
-Agent personas live in `.claude/agents/` (dev.md, reviewer.md). Commands in `.claude/commands/`. Skills in `.claude/skills/`.
+Agent personas live in `.claude/agents/` (dev.md, reviewer.md, test-doc.md). Commands in `.claude/commands/`. Skills in `.claude/skills/` with multi-phase orchestration (e.g. `/tq-e2e` runs `triage.md` then `fix.md`).
 
 ## Linters (`.golangci.yml`)
 
