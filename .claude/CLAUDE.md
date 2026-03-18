@@ -30,6 +30,21 @@ We take full ownership of the codebase. There is no "pre-existing" code — if y
 - Doc examples in `docs/*.md` are tested by `TestDocs` — keep code blocks in sync
 - `--arg`/`--argjson` use jq-style syntax: `--arg NAME VALUE` (two positional args)
 
+## Development Workflow
+
+Three-layer system for structured development:
+
+- **`/analyst <idea>`** — gather requirements, create GitHub issue with acceptance criteria
+- **`/dev-cycle #<issue>`** — TDD dev-review loop: implement → review → iterate (max 3 rounds)
+- **`/dev #<issue>`** — one-shot developer subagent (no review loop)
+- **`/reviewer`** — one-shot code review of current branch vs main
+- **`/tq-e2e`** — triage CI/test failures: classify flaky vs real, then fix
+- **`/tq-check`** — run quality gate (lint, vet, build, test)
+- **`/tq-review`** — detailed code review with 10-point checklist
+- **`/tq-ship`** — check → commit → push → open PR
+
+Agent personas live in `.claude/agents/` (dev.md, reviewer.md). Commands in `.claude/commands/`. Skills in `.claude/skills/`.
+
 ## Linters (`.golangci.yml`)
 
 Enabled beyond defaults: gocritic (diagnostic + style + performance), errorlint, nilerr, reassign, wastedassign, forcetypeassert, exhaustive, errchkjson, perfsprint, forbidigo, nolintlint, bodyclose, asciicheck, bidichk, copyloopvar, durationcheck, errname, goconst, nakedret, usestdlibvars, whitespace, makezero, intrange, mirror, tparallel, dupl (75 tokens), maintidx (under 20), funlen (60 lines / 40 statements). `errcheck.check-type-assertions: true`. gocyclo max complexity: 10 (Go best practice — refactor if exceeded, never raise). Source files max 500 LOC, test files max 1000 LOC.
