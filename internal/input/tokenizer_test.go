@@ -350,6 +350,42 @@ func heapInuse() uint64 {
 // through TokenReader and verifies heap stays bounded. The document is an
 // array of 550,000 complex objects with sub-objects, arrays, strings,
 // booleans, numbers, and nulls. Peak heap must stay well below the doc size.
+// measureReaderSize drains a reader and returns the total bytes read.
+func measureReaderSize(r io.Reader) int64 {
+	var size int64
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := r.Read(buf)
+		size += int64(n)
+		if err != nil {
+			break
+		}
+	}
+	return size
+}
+
+// consumeTokens reads all tokens from tr, sampling heap at quarter points.
+func consumeTokens(t *testing.T, tr *TokenReader, estimatedTokens int) (consumed int, samples [3]uint64) {
+	t.Helper()
+	samplePoints := [3]int{estimatedTokens / 4, estimatedTokens / 2, 3 * estimatedTokens / 4}
+	nextSample := 0
+	for {
+		_, ok, err := tr.Next()
+		if err != nil {
+			t.Fatalf("unexpected error at token %d: %v", consumed, err)
+		}
+		if !ok {
+			break
+		}
+		consumed++
+		if nextSample < len(samplePoints) && consumed >= samplePoints[nextSample] {
+			samples[nextSample] = heapInuse()
+			nextSample++
+		}
+	}
+	return consumed, samples
+}
+
 func TestTokenReader_ConstantMemory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping memory test in short mode")
@@ -360,47 +396,12 @@ func TestTokenReader_ConstantMemory(t *testing.T) {
 		heapLimit = 10 * 1024 * 1024 // 10 MB ceiling
 	)
 
-	// Measure actual document size by draining a reader.
-	sizer := newNestedArrayReader(elements)
-	var docSize int64
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := sizer.Read(buf)
-		docSize += int64(n)
-		if err == io.EOF {
-			break
-		}
-	}
+	docSize := measureReaderSize(newNestedArrayReader(elements))
 	t.Logf("document size: %d bytes (%.1f MB)", docSize, float64(docSize)/(1024*1024))
 
 	baseline := heapInuse()
-
 	tr := NewTokenReader(newNestedArrayReader(elements))
-
-	// First pass already measured the doc; we know each element produces a
-	// fixed number of tokens. Estimate total tokens to set sample points.
-	estimatedTokens := elements * 16 // ~16 tokens per element (rough)
-	samplePoints := [3]int{estimatedTokens / 4, estimatedTokens / 2, 3 * estimatedTokens / 4}
-	var samples [3]uint64
-	nextSample := 0
-	consumed := 0
-
-	for {
-		_, ok, err := tr.Next()
-		if err != nil {
-			t.Fatalf("unexpected error at token %d: %v", consumed, err)
-		}
-		if !ok {
-			break
-		}
-		consumed++
-
-		if nextSample < len(samplePoints) && consumed >= samplePoints[nextSample] {
-			samples[nextSample] = heapInuse()
-			nextSample++
-		}
-	}
-
+	consumed, samples := consumeTokens(t, tr, elements*16)
 	final := heapInuse()
 
 	t.Logf("total tokens consumed: %d (%.0f per element)", consumed, float64(consumed)/float64(elements))

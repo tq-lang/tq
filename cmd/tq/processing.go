@@ -26,18 +26,9 @@ func processFiles(files []string, code *gojq.Code, varValues []any, opts output.
 
 	exitCode := 0
 	for _, f := range files {
-		fileSC := sc
-		// Auto-detect streaming for large files when not explicitly set.
-		if fileSC == nil && !cfg.noStream && shouldAutoStream(f, threshold) {
-			var src int
-			fileSC, src = buildStreamCfg(filterExpr, argVars, argjsonVars)
-			if src != 0 {
-				return src
-			}
-			if !cfg.quiet {
-				fmt.Fprintf(os.Stderr, "tq: info: streaming enabled for %s (file > %s)\n", fileLabel(f), formatSize(threshold))
-				warnNonStreamable(filterExpr)
-			}
+		fileSC, src := resolveFileStream(f, sc, cfg, threshold, filterExpr, argVars, argjsonVars)
+		if src != 0 {
+			return src
 		}
 		rc := filterFile(f, code, varValues, opts, hasOutput, fileSC)
 		if rc == exitUsage {
@@ -48,6 +39,22 @@ func processFiles(files []string, code *gojq.Code, varValues []any, opts output.
 		}
 	}
 	return exitCode
+}
+
+// resolveFileStream returns the stream config for a file, auto-detecting if needed.
+func resolveFileStream(f string, sc *streamCfg, cfg *config, threshold int64, filterExpr string, argVars, argjsonVars []keyValue) (*streamCfg, int) {
+	if sc != nil || cfg.noStream || !shouldAutoStream(f, threshold) {
+		return sc, 0
+	}
+	fileSC, src := buildStreamCfg(filterExpr, argVars, argjsonVars)
+	if src != 0 {
+		return nil, src
+	}
+	if !cfg.quiet {
+		fmt.Fprintf(os.Stderr, "tq: info: streaming enabled for %s (file > %s)\n", fileLabel(f), formatSize(threshold))
+		warnNonStreamable(filterExpr)
+	}
+	return fileSC, 0
 }
 
 // filterFile opens a single file, runs the filter on each value, and closes it.

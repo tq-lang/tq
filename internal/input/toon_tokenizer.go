@@ -2,6 +2,7 @@ package input
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"strings"
 )
@@ -60,7 +61,7 @@ func (tr *TOONTokenReader) Next() (any, bool, error) {
 		}
 		if err := tr.advance(); err != nil {
 			tr.done = true
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				tr.emitClosing()
 				if len(tr.pending) > 0 {
 					v := tr.pending[0]
@@ -164,40 +165,52 @@ func (tr *TOONTokenReader) advance() error {
 			continue
 		}
 
-		// Handle dedent.
 		tr.handleDedent(indent)
+		return tr.dispatchLine(indent, content)
+	}
+}
 
-		// Dispatch based on container context.
-		if len(tr.stack) > 0 {
-			top := &tr.stack[len(tr.stack)-1]
-			switch top.kind {
-			case containerListArray:
-				if indent == top.indent && strings.HasPrefix(content, "-") {
-					return tr.processListItem(indent, content, len(tr.stack)-1)
-				}
-				// Dedented out of list — pop and reprocess.
-				tr.popContainer()
-				return tr.processLine(indent, content)
-			case containerTabularArray:
-				trimmed := strings.TrimSpace(content)
-				if indent == top.indent && indexOutsideQuotes(trimmed, ':') == -1 {
-					return tr.processTabularRow(indent, content, top)
-				}
-				tr.popContainer()
-				return tr.processLine(indent, content)
-			case containerObject:
-				if indent == top.indent {
-					// Sibling in object — pop previous sibling key.
-					if top.childCount > 0 && len(tr.path) > 0 {
-						tr.path = tr.path[:len(tr.path)-1]
-					}
-					top.childCount++
-					return tr.processLine(indent, content)
-				}
-			}
-		}
-
+// dispatchLine routes a line to the appropriate handler based on the current container context.
+func (tr *TOONTokenReader) dispatchLine(indent int, content string) error {
+	if len(tr.stack) == 0 {
 		return tr.processLine(indent, content)
+	}
+
+	top := &tr.stack[len(tr.stack)-1]
+	switch top.kind {
+	case containerListArray:
+		return tr.dispatchListArray(indent, content, top)
+	case containerTabularArray:
+		return tr.dispatchTabularArray(indent, content, top)
+	case containerObject:
+		tr.advanceObjectSibling(indent, top)
+	}
+	return tr.processLine(indent, content)
+}
+
+func (tr *TOONTokenReader) dispatchListArray(indent int, content string, top *containerInfo) error {
+	if indent == top.indent && strings.HasPrefix(content, "-") {
+		return tr.processListItem(indent, content, len(tr.stack)-1)
+	}
+	tr.popContainer()
+	return tr.processLine(indent, content)
+}
+
+func (tr *TOONTokenReader) dispatchTabularArray(indent int, content string, top *containerInfo) error {
+	trimmed := strings.TrimSpace(content)
+	if indent == top.indent && indexOutsideQuotes(trimmed, ':') == -1 {
+		return tr.processTabularRow(indent, content, top)
+	}
+	tr.popContainer()
+	return tr.processLine(indent, content)
+}
+
+func (tr *TOONTokenReader) advanceObjectSibling(indent int, top *containerInfo) {
+	if indent == top.indent {
+		if top.childCount > 0 && len(tr.path) > 0 {
+			tr.path = tr.path[:len(tr.path)-1]
+		}
+		top.childCount++
 	}
 }
 
@@ -271,29 +284,8 @@ func (tr *TOONTokenReader) processArrayHeader(indent int, header toonParsedHeade
 
 	delimiter := header.delimiter.toRune()
 
-	// Inline array.
 	if header.inlineValues != "" {
-		raw, err := splitInlineValues(header.inlineValues, delimiter)
-		if err != nil {
-			return err
-		}
-		for i, token := range raw {
-			tr.path = append(tr.path, i)
-			value, err := decodePrimitiveToken(token)
-			if err != nil {
-				return err
-			}
-			tr.emitLeaf(value)
-			tr.path = tr.path[:len(tr.path)-1]
-		}
-		if len(raw) > 0 {
-			tr.path = append(tr.path, len(raw)-1)
-			tr.emitTruncate()
-			tr.path = tr.path[:len(tr.path)-1]
-		} else {
-			tr.emit([]any{tr.copyPath(), []any{}})
-		}
-		return nil
+		return tr.emitInlineArray(header.inlineValues, delimiter)
 	}
 
 	// Tabular array.
@@ -316,6 +308,31 @@ func (tr *TOONTokenReader) processArrayHeader(indent int, header toonParsedHeade
 		indent: indent + 1,
 		index:  0,
 	})
+	return nil
+}
+
+// emitInlineArray emits all values of an inline array like "[3]: a,b,c".
+func (tr *TOONTokenReader) emitInlineArray(values string, delimiter rune) error {
+	raw, err := splitInlineValues(values, delimiter)
+	if err != nil {
+		return err
+	}
+	for i, token := range raw {
+		tr.path = append(tr.path, i)
+		value, err := decodePrimitiveToken(token)
+		if err != nil {
+			return err
+		}
+		tr.emitLeaf(value)
+		tr.path = tr.path[:len(tr.path)-1]
+	}
+	if len(raw) > 0 {
+		tr.path = append(tr.path, len(raw)-1)
+		tr.emitTruncate()
+		tr.path = tr.path[:len(tr.path)-1]
+	} else {
+		tr.emit([]any{tr.copyPath(), []any{}})
+	}
 	return nil
 }
 

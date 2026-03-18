@@ -33,7 +33,7 @@ type config struct {
 
 // extractVarArgs scans args for --arg/--argjson NAME VALUE (jq-style two-positional-arg syntax),
 // collects the pairs, and returns the remaining args for pflag.
-func extractVarArgs(args []string) (remaining []string, argPairs, argjsonPairs []string, err error) {
+func extractVarArgs(args []string) (remaining, argPairs, argjsonPairs []string, err error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {

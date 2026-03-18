@@ -192,46 +192,46 @@ func TestCLI(t *testing.T) {
 	}
 }
 
+// writeTestFile is a helper that writes content to a file and fails the test on error.
+func writeTestFile(t *testing.T, path string, content []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// expectTQ runs tq with args on a file, asserts exit 0, and checks stdout contains wantOut.
+func expectTQ(t *testing.T, stdin string, wantOut string, args ...string) {
+	t.Helper()
+	stdout, stderr, code := runTQ(t, stdin, args...)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if wantOut != "" && !strings.Contains(stdout, wantOut) {
+		t.Errorf("stdout = %q, want substring %q", stdout, wantOut)
+	}
+}
+
 func TestCLIWithFiles(t *testing.T) {
 	tmp := t.TempDir()
 
 	t.Run("file input", func(t *testing.T) {
 		f := filepath.Join(tmp, "input.json")
-		if err := os.WriteFile(f, []byte(`{"x":42}`), 0644); err != nil {
-			t.Fatal(err)
-		}
-		stdout, _, code := runTQ(t, "", ".x", f)
-		if code != 0 {
-			t.Fatalf("exit code = %d, want 0", code)
-		}
-		if !strings.Contains(stdout, "42") {
-			t.Errorf("got %q, want 42", stdout)
-		}
+		writeTestFile(t, f, []byte(`{"x":42}`))
+		expectTQ(t, "", "42", ".x", f)
 	})
 
 	t.Run("from-file filter", func(t *testing.T) {
 		f := filepath.Join(tmp, "filter.jq")
-		if err := os.WriteFile(f, []byte(".name"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		stdout, _, code := runTQ(t, `{"name":"Bob"}`, "-f", f)
-		if code != 0 {
-			t.Fatalf("exit code = %d, want 0", code)
-		}
-		if !strings.Contains(stdout, "Bob") {
-			t.Errorf("got %q, want Bob", stdout)
-		}
+		writeTestFile(t, f, []byte(".name"))
+		expectTQ(t, `{"name":"Bob"}`, "Bob", "-f", f)
 	})
 
 	t.Run("multiple files", func(t *testing.T) {
 		f1 := filepath.Join(tmp, "a.json")
 		f2 := filepath.Join(tmp, "b.json")
-		if err := os.WriteFile(f1, []byte(`{"v":1}`), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(f2, []byte(`{"v":2}`), 0644); err != nil {
-			t.Fatal(err)
-		}
+		writeTestFile(t, f1, []byte(`{"v":1}`))
+		writeTestFile(t, f2, []byte(`{"v":2}`))
 		stdout, _, code := runTQ(t, "", ".v", f1, f2)
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0", code)
@@ -243,9 +243,7 @@ func TestCLIWithFiles(t *testing.T) {
 
 	t.Run("multi-doc file", func(t *testing.T) {
 		f := filepath.Join(tmp, "multi.json")
-		if err := os.WriteFile(f, []byte("{\"a\":1}\n{\"b\":2}\n"), 0644); err != nil {
-			t.Fatal(err)
-		}
+		writeTestFile(t, f, []byte("{\"a\":1}\n{\"b\":2}\n"))
 		stdout, _, code := runTQ(t, "", "--json", "-c", ".", f)
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0", code)
@@ -254,71 +252,66 @@ func TestCLIWithFiles(t *testing.T) {
 			t.Errorf("got %q, want both docs", stdout)
 		}
 	})
+}
 
-	t.Run("auto-stream threshold", func(t *testing.T) {
-		// Create a small file and set threshold very low to trigger auto-stream.
-		f := filepath.Join(tmp, "small.json")
-		if err := os.WriteFile(f, []byte(`{"a":1}`), 0644); err != nil {
-			t.Fatal(err)
-		}
-		stdout, stderr, code := runTQ(t, "", "--stream-threshold", "1B", "--json", "-c", ".", f)
-		if code != 0 {
-			t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr)
-		}
-		if !strings.Contains(stderr, "streaming enabled") {
-			t.Errorf("expected auto-stream info in stderr, got %q", stderr)
-		}
-		if !strings.Contains(stdout, `[["a"],1]`) {
-			t.Errorf("expected stream output, got %q", stdout)
-		}
-	})
+func TestAutoStreamThreshold(t *testing.T) {
+	tmp := t.TempDir()
+	f := filepath.Join(tmp, "small.json")
+	writeTestFile(t, f, []byte(`{"a":1}`))
+	stdout, stderr, code := runTQ(t, "", "--stream-threshold", "1B", "--json", "-c", ".", f)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stderr, "streaming enabled") {
+		t.Errorf("expected auto-stream info in stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `[["a"],1]`) {
+		t.Errorf("expected stream output, got %q", stdout)
+	}
+}
 
-	t.Run("no-stream suppresses auto", func(t *testing.T) {
-		f := filepath.Join(tmp, "small2.json")
-		if err := os.WriteFile(f, []byte(`{"a":1}`), 0644); err != nil {
-			t.Fatal(err)
-		}
-		_, stderr, code := runTQ(t, "", "--no-stream", "--stream-threshold", "1B", "--json", "-c", ".", f)
-		if code != 0 {
-			t.Fatalf("exit code = %d, want 0", code)
-		}
-		if strings.Contains(stderr, "streaming enabled") {
-			t.Errorf("--no-stream should suppress auto-stream, got stderr %q", stderr)
-		}
-	})
+func TestNoStreamSuppressesAuto(t *testing.T) {
+	tmp := t.TempDir()
+	f := filepath.Join(tmp, "small2.json")
+	writeTestFile(t, f, []byte(`{"a":1}`))
+	_, stderr, code := runTQ(t, "", "--no-stream", "--stream-threshold", "1B", "--json", "-c", ".", f)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if strings.Contains(stderr, "streaming enabled") {
+		t.Errorf("--no-stream should suppress auto-stream, got stderr %q", stderr)
+	}
+}
 
-	t.Run("env TQ_STREAM_THRESHOLD", func(t *testing.T) {
-		f := filepath.Join(tmp, "small3.json")
-		if err := os.WriteFile(f, []byte(`{"b":2}`), 0644); err != nil {
-			t.Fatal(err)
-		}
-		cmd := exec.Command(binaryPath, "--json", "-c", ".", f)
-		cmd.Env = append(os.Environ(), "TQ_STREAM_THRESHOLD=1B")
-		if coverDir != "" {
-			cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
-		}
-		var outBuf, errBuf strings.Builder
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("tq failed: %v", err)
-		}
-		if !strings.Contains(errBuf.String(), "streaming enabled") {
-			t.Errorf("expected auto-stream via env var, got stderr %q", errBuf.String())
-		}
-	})
+func TestQuietSuppressesAutoStreamInfo(t *testing.T) {
+	tmp := t.TempDir()
+	f := filepath.Join(tmp, "small4.json")
+	writeTestFile(t, f, []byte(`{"a":1}`))
+	_, stderr, code := runTQ(t, "", "--quiet", "--stream-threshold", "1B", "--json", "-c", ".", f)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if strings.Contains(stderr, "streaming enabled") {
+		t.Errorf("--quiet should suppress auto-stream info, got stderr %q", stderr)
+	}
+}
 
-	t.Run("quiet suppresses auto-stream info", func(t *testing.T) {
-		f := filepath.Join(tmp, "small4.json")
-		if err := os.WriteFile(f, []byte(`{"a":1}`), 0644); err != nil {
-			t.Fatal(err)
-		}
-		_, stderr, code := runTQ(t, "", "--quiet", "--stream-threshold", "1B", "--json", "-c", ".", f)
-		if code != 0 {
-			t.Fatalf("exit code = %d, want 0", code)
-		}
-		if strings.Contains(stderr, "streaming enabled") {
-			t.Errorf("--quiet should suppress auto-stream info, got stderr %q", stderr)
-		}
-	})
+func TestEnvStreamThreshold(t *testing.T) {
+	tmp := t.TempDir()
+	f := filepath.Join(tmp, "small3.json")
+	writeTestFile(t, f, []byte(`{"b":2}`))
+	cmd := exec.Command(binaryPath, "--json", "-c", ".", f)
+	cmd.Env = append(os.Environ(), "TQ_STREAM_THRESHOLD=1B")
+	if coverDir != "" {
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+	}
+	var outBuf, errBuf strings.Builder
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("tq failed: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "streaming enabled") {
+		t.Errorf("expected auto-stream via env var, got stderr %q", errBuf.String())
+	}
 }
