@@ -28,6 +28,7 @@ changelog:
 
 release:
   extra_files: []
+  prerelease: auto
   footer: |
     **Full Changelog**: https://github.com/tq-lang/tq/blob/main/CHANGELOG.md
 
@@ -37,6 +38,14 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
       branch: goreleaser-{{ .ProjectName }}-{{ .Version }}
+      pull_request:
+        enabled: true
+        base:
+          owner: tq-lang
+          name: homebrew-tap
+          branch: main
+    skip_upload: false
+    directory: Formula
     homepage: https://github.com/tq-lang/tq
     description: "Command-line TOON/JSON processor — jq for TOON"
     license: MIT
