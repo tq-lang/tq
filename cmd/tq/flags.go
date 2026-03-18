@@ -91,12 +91,12 @@ func parseFlags() (*config, []string) {
 	cfg.argPairs = argPairs
 	cfg.argjsonPairs = argjsonPairs
 
-	flag.CommandLine.Parse(remaining)
+	_ = flag.CommandLine.Parse(remaining)
 	return cfg, flag.Args()
 }
 
 func printUsage() {
-	fmt.Fprint(os.Stdout, `Usage: tq [flags] <filter> [file...]
+	_, _ = fmt.Fprint(os.Stdout, `Usage: tq [flags] <filter> [file...]
 
 tq is a command-line TOON/JSON processor. Like jq, but for TOON.
 
