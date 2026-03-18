@@ -27,6 +27,11 @@ jobs:
         with:
           tool: git-cliff
 
+      - name: Install syft
+        uses: taiki-e/install-action@735e5933943122c5ac182670a935f54a949265c1 # v2
+        with:
+          tool: syft
+
       - uses: goreleaser/goreleaser-action@9a127d869fb706213d29cdf8eef3a4ea2b869415 # v7
         with:
           version: "~> v2"
@@ -36,6 +41,7 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Attest release archives
+        if: ${{ vars.ENABLE_GITHUB_ATTESTATIONS == 'true' && !github.event.repository.private }}
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: |

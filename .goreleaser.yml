@@ -22,12 +22,16 @@ archives:
 
 sboms:
   - artifacts: archive
-    documents:
-      - spdx-json
 
 changelog:
   use: git-cliff
   # git-cliff uses cliff.toml for config
+
+release:
+  extra_files: []
+  prerelease: auto
+  footer: |
+    **Full Changelog**: https://github.com/tq-lang/tq/blob/main/CHANGELOG.md
 
 brews:
   - repository:
