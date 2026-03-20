@@ -470,7 +470,7 @@ func (tr *TOONTokenReader) emitOptionalValue(rest string) (int, error) {
 	return 1, tr.emitPrimitive(rest)
 }
 
-func (tr *TOONTokenReader) pushObjectContainerWithCount(indent int, childCount int) {
+func (tr *TOONTokenReader) pushObjectContainerWithCount(indent, childCount int) {
 	tr.stack = append(tr.stack, containerInfo{
 		kind:       containerObject,
 		indent:     indent + 1,
