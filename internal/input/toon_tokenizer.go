@@ -51,28 +51,49 @@ func NewTOONTokenReader(r io.Reader) *TOONTokenReader {
 // Next returns the next streaming pair.
 func (tr *TOONTokenReader) Next() (any, bool, error) {
 	for {
-		if len(tr.pending) > 0 {
-			v := tr.pending[0]
-			tr.pending = tr.pending[1:]
-			return v, true, nil
-		}
-		if tr.done {
-			return nil, false, nil
-		}
-		if err := tr.advance(); err != nil {
-			tr.done = true
-			if errors.Is(err, io.EOF) {
-				tr.emitClosing()
-				if len(tr.pending) > 0 {
-					v := tr.pending[0]
-					tr.pending = tr.pending[1:]
-					return v, true, nil
-				}
-				return nil, false, nil
-			}
-			return nil, false, err
+		v, ok, err := tr.step()
+		if ok || err != nil || tr.done {
+			return v, ok, err
 		}
 	}
+}
+
+func (tr *TOONTokenReader) step() (any, bool, error) {
+	if v, ok := tr.drainPending(); ok {
+		return v, true, nil
+	}
+	if tr.done {
+		return nil, false, nil
+	}
+	return tr.advanceOrHandle()
+}
+
+func (tr *TOONTokenReader) advanceOrHandle() (any, bool, error) {
+	if err := tr.advance(); err != nil {
+		return tr.handleAdvanceErr(err)
+	}
+	return nil, false, nil
+}
+
+func (tr *TOONTokenReader) drainPending() (any, bool) {
+	if len(tr.pending) == 0 {
+		return nil, false
+	}
+	v := tr.pending[0]
+	tr.pending = tr.pending[1:]
+	return v, true
+}
+
+func (tr *TOONTokenReader) handleAdvanceErr(err error) (any, bool, error) {
+	tr.done = true
+	if !errors.Is(err, io.EOF) {
+		return nil, false, err
+	}
+	tr.emitClosing()
+	if v, ok := tr.drainPending(); ok {
+		return v, true, nil
+	}
+	return nil, false, nil
 }
 
 func (tr *TOONTokenReader) copyPath() []any {
@@ -110,27 +131,15 @@ func (tr *TOONTokenReader) popContainer() {
 	if len(tr.stack) == 0 {
 		return
 	}
-	top := tr.stack[len(tr.stack)-1]
 	tr.stack = tr.stack[:len(tr.stack)-1]
+	tr.emitTruncateAndPop()
+}
 
-	switch top.kind {
-	case containerObject:
-		// Path has the last key from this object. Emit truncate, pop key.
-		tr.emitTruncate()
-		if len(tr.path) > 0 {
-			tr.path = tr.path[:len(tr.path)-1]
-		}
-	case containerListArray:
-		// Path has the last array index.
-		tr.emitTruncate()
-		if len(tr.path) > 0 {
-			tr.path = tr.path[:len(tr.path)-1]
-		}
-	case containerTabularArray:
-		tr.emitTruncate()
-		if len(tr.path) > 0 {
-			tr.path = tr.path[:len(tr.path)-1]
-		}
+// emitTruncateAndPop emits a truncate marker and removes the last path element.
+func (tr *TOONTokenReader) emitTruncateAndPop() {
+	tr.emitTruncate()
+	if len(tr.path) > 0 {
+		tr.path = tr.path[:len(tr.path)-1]
 	}
 }
 
@@ -150,24 +159,39 @@ func (tr *TOONTokenReader) advance() error {
 	for {
 		line, ok := tr.nextLine()
 		if !ok {
-			if err := tr.scanner.Err(); err != nil {
-				return err
-			}
-			return io.EOF
+			return tr.scannerEOF()
 		}
-
-		if strings.TrimSpace(line) == "" {
-			continue
+		if err, handled := tr.processIfContent(line); handled {
+			return err
 		}
-
-		indent, content := computeIndent(line, tr.indentSize)
-		if content == "" {
-			continue
-		}
-
-		tr.handleDedent(indent)
-		return tr.dispatchLine(indent, content)
 	}
+}
+
+func (tr *TOONTokenReader) processIfContent(line string) (error, bool) {
+	indent, content, skip := tr.parseLine(line)
+	if skip {
+		return nil, false
+	}
+	tr.handleDedent(indent)
+	return tr.dispatchLine(indent, content), true
+}
+
+func (tr *TOONTokenReader) scannerEOF() error {
+	if err := tr.scanner.Err(); err != nil {
+		return err
+	}
+	return io.EOF
+}
+
+func (tr *TOONTokenReader) parseLine(line string) (int, string, bool) {
+	if strings.TrimSpace(line) == "" {
+		return 0, "", true
+	}
+	indent, content := computeIndent(line, tr.indentSize)
+	if content == "" {
+		return 0, "", true
+	}
+	return indent, content, false
 }
 
 // dispatchLine routes a line to the appropriate handler based on the current container context.
@@ -175,17 +199,23 @@ func (tr *TOONTokenReader) dispatchLine(indent int, content string) error {
 	if len(tr.stack) == 0 {
 		return tr.processLine(indent, content)
 	}
+	return tr.dispatchContainer(indent, content)
+}
 
-	top := &tr.stack[len(tr.stack)-1]
-	switch top.kind {
-	case containerListArray:
+func (tr *TOONTokenReader) dispatchContainer(indent int, content string) error {
+	top := tr.topContainer()
+	if top.kind == containerListArray {
 		return tr.dispatchListArray(indent, content, top)
-	case containerTabularArray:
-		return tr.dispatchTabularArray(indent, content, top)
-	case containerObject:
-		tr.advanceObjectSibling(indent, top)
 	}
+	if top.kind == containerTabularArray {
+		return tr.dispatchTabularArray(indent, content, top)
+	}
+	tr.advanceObjectSibling(indent, top)
 	return tr.processLine(indent, content)
+}
+
+func (tr *TOONTokenReader) topContainer() *containerInfo {
+	return &tr.stack[len(tr.stack)-1]
 }
 
 func (tr *TOONTokenReader) dispatchListArray(indent int, content string, top *containerInfo) error {
@@ -242,26 +272,40 @@ func (tr *TOONTokenReader) processKV(indent int, content string) error {
 	if err != nil {
 		return err
 	}
+	tr.pushTopKey(indent, key)
+	return tr.handleKVValue(indent, rest)
+}
 
-	// Pop previous top-level key if at indent 0 with no containers.
-	if indent == 0 && len(tr.stack) == 0 && tr.hasTopKey && len(tr.path) > 0 {
-		tr.path = tr.path[:len(tr.path)-1]
-	}
-
-	tr.path = append(tr.path, key)
-	if indent == 0 && len(tr.stack) == 0 {
-		tr.hasTopKey = true
-	}
-
+func (tr *TOONTokenReader) handleKVValue(indent int, rest string) error {
 	if rest == "" {
-		tr.stack = append(tr.stack, containerInfo{
-			kind:   containerObject,
-			indent: indent + 1,
-		})
+		tr.pushObjectContainer(indent)
 		return nil
 	}
+	return tr.emitPrimitive(rest)
+}
 
-	value, err := decodePrimitiveToken(rest)
+// pushTopKey manages the path when entering a new key-value pair.
+func (tr *TOONTokenReader) pushTopKey(indent int, key string) {
+	tr.popPreviousTopKey(indent)
+	tr.path = append(tr.path, key)
+	if tr.isTopLevel(indent) {
+		tr.hasTopKey = true
+	}
+}
+
+func (tr *TOONTokenReader) isTopLevel(indent int) bool {
+	return indent == 0 && len(tr.stack) == 0
+}
+
+func (tr *TOONTokenReader) pushObjectContainer(indent int) {
+	tr.stack = append(tr.stack, containerInfo{
+		kind:   containerObject,
+		indent: indent + 1,
+	})
+}
+
+func (tr *TOONTokenReader) emitPrimitive(token string) error {
+	value, err := decodePrimitiveToken(token)
 	if err != nil {
 		return err
 	}
@@ -270,45 +314,58 @@ func (tr *TOONTokenReader) processKV(indent int, content string) error {
 }
 
 func (tr *TOONTokenReader) processArrayHeader(indent int, header toonParsedHeader) error {
-	// Pop previous top-level key if needed.
-	if indent == 0 && len(tr.stack) == 0 && tr.hasTopKey && len(tr.path) > 0 {
-		tr.path = tr.path[:len(tr.path)-1]
-	}
-
-	if header.key != "" {
-		tr.path = append(tr.path, header.key)
-		if indent == 0 && len(tr.stack) == 0 {
-			tr.hasTopKey = true
-		}
-	}
+	tr.popPreviousTopKey(indent)
+	tr.pushHeaderKey(indent, header.key)
 
 	delimiter := header.delimiter.toRune()
-
 	if header.inlineValues != "" {
 		return tr.emitInlineArray(header.inlineValues, delimiter)
 	}
+	tr.pushArrayContainer(indent, header, delimiter)
+	return nil
+}
 
-	// Tabular array.
-	if len(header.fields) > 0 {
-		tr.path = append(tr.path, 0)
-		tr.stack = append(tr.stack, containerInfo{
-			kind:      containerTabularArray,
-			indent:    indent + 1,
-			fields:    header.fields,
-			delimiter: delimiter,
-			index:     0,
-		})
-		return nil
+func (tr *TOONTokenReader) popPreviousTopKey(indent int) {
+	if tr.isTopLevel(indent) && tr.hasTopKey && len(tr.path) > 0 {
+		tr.path = tr.path[:len(tr.path)-1]
 	}
+}
 
-	// List array.
+func (tr *TOONTokenReader) pushHeaderKey(indent int, key string) {
+	if key == "" {
+		return
+	}
+	tr.path = append(tr.path, key)
+	if tr.isTopLevel(indent) {
+		tr.hasTopKey = true
+	}
+}
+
+func (tr *TOONTokenReader) pushArrayContainer(indent int, header toonParsedHeader, delimiter rune) {
 	tr.path = append(tr.path, 0)
+	if len(header.fields) > 0 {
+		tr.pushTabularContainer(indent, header.fields, delimiter)
+	} else {
+		tr.pushListContainer(indent)
+	}
+}
+
+func (tr *TOONTokenReader) pushTabularContainer(indent int, fields []string, delimiter rune) {
+	tr.stack = append(tr.stack, containerInfo{
+		kind:      containerTabularArray,
+		indent:    indent + 1,
+		fields:    fields,
+		delimiter: delimiter,
+		index:     0,
+	})
+}
+
+func (tr *TOONTokenReader) pushListContainer(indent int) {
 	tr.stack = append(tr.stack, containerInfo{
 		kind:   containerListArray,
 		indent: indent + 1,
 		index:  0,
 	})
-	return nil
 }
 
 // emitInlineArray emits all values of an inline array like "[3]: a,b,c".
@@ -317,111 +374,122 @@ func (tr *TOONTokenReader) emitInlineArray(values string, delimiter rune) error 
 	if err != nil {
 		return err
 	}
+	if err := tr.emitIndexedValues(raw); err != nil {
+		return err
+	}
+	tr.emitArrayClose(len(raw))
+	return nil
+}
+
+func (tr *TOONTokenReader) emitIndexedValues(raw []string) error {
 	for i, token := range raw {
 		tr.path = append(tr.path, i)
-		value, err := decodePrimitiveToken(token)
-		if err != nil {
+		if err := tr.emitPrimitive(token); err != nil {
 			return err
 		}
-		tr.emitLeaf(value)
 		tr.path = tr.path[:len(tr.path)-1]
 	}
-	if len(raw) > 0 {
-		tr.path = append(tr.path, len(raw)-1)
+	return nil
+}
+
+func (tr *TOONTokenReader) emitArrayClose(count int) {
+	if count > 0 {
+		tr.path = append(tr.path, count-1)
 		tr.emitTruncate()
 		tr.path = tr.path[:len(tr.path)-1]
 	} else {
 		tr.emit([]any{tr.copyPath(), []any{}})
 	}
-	return nil
 }
 
 func (tr *TOONTokenReader) processListItem(indent int, content string, listIdx int) error {
 	top := &tr.stack[listIdx]
 	itemContent := strings.TrimSpace(content[1:]) // skip '-'
-
-	// Update array index.
 	tr.path[len(tr.path)-1] = top.index
 
 	if itemContent == "" {
-		tr.emit([]any{tr.copyPath(), map[string]any{}})
-		top.index++
-		return nil
+		return tr.emitEmptyListItem(top)
 	}
+	return tr.processListContent(indent, itemContent, listIdx, top)
+}
 
-	// Inline sub-array: - [3]: a,b,c
-	if strings.HasPrefix(itemContent, "[") {
-		itemHeader, ok, err := tryParseHeader(itemContent)
-		if err != nil {
-			return err
-		}
-		if ok {
-			return tr.processInlineArrayInList(itemHeader, listIdx)
-		}
+func (tr *TOONTokenReader) emitEmptyListItem(top *containerInfo) error {
+	tr.emit([]any{tr.copyPath(), map[string]any{}})
+	top.index++
+	return nil
+}
+
+func (tr *TOONTokenReader) processListContent(indent int, content string, listIdx int, top *containerInfo) error {
+	if handled, err := tr.tryInlineSubArray(content, listIdx); handled || err != nil {
+		return err
 	}
-
-	// Object item in list: - key: value
-	if isKeyValue(itemContent) {
-		key, rest, err := splitKeyValue(itemContent)
-		if err != nil {
-			return err
-		}
-		tr.path = append(tr.path, key)
-		if rest == "" {
-			tr.stack = append(tr.stack, containerInfo{
-				kind:   containerObject,
-				indent: indent + 1,
-			})
-			// Re-fetch after append (backing array may have moved).
-			tr.stack[listIdx].index++
-			return nil
-		}
-		value, err := decodePrimitiveToken(rest)
-		if err != nil {
-			return err
-		}
-		tr.emitLeaf(value)
-		tr.stack = append(tr.stack, containerInfo{
-			kind:       containerObject,
-			indent:     indent + 1,
-			childCount: 1,
-		})
-		tr.stack[listIdx].index++
-		return nil
+	if isKeyValue(content) {
+		return tr.processListObjectItem(indent, content, listIdx)
 	}
+	return tr.processListScalar(content, top)
+}
 
-	// Simple scalar.
-	value, err := decodePrimitiveToken(itemContent)
+func (tr *TOONTokenReader) tryInlineSubArray(content string, listIdx int) (bool, error) {
+	if !strings.HasPrefix(content, "[") {
+		return false, nil
+	}
+	return tr.parseAndEmitInlineSubArray(content, listIdx)
+}
+
+func (tr *TOONTokenReader) parseAndEmitInlineSubArray(content string, listIdx int) (bool, error) {
+	header, ok, err := tryParseHeader(content)
+	if err != nil || !ok {
+		return false, err
+	}
+	return true, tr.processInlineArrayInList(header, listIdx)
+}
+
+func (tr *TOONTokenReader) processListObjectItem(indent int, content string, listIdx int) error {
+	count, err := tr.emitListObjectKV(content)
 	if err != nil {
 		return err
 	}
-	tr.emitLeaf(value)
+	tr.pushObjectContainerWithCount(indent, count)
+	tr.stack[listIdx].index++
+	return nil
+}
+
+func (tr *TOONTokenReader) emitListObjectKV(content string) (int, error) {
+	key, rest, err := splitKeyValue(content)
+	if err != nil {
+		return 0, err
+	}
+	tr.path = append(tr.path, key)
+	return tr.emitOptionalValue(rest)
+}
+
+func (tr *TOONTokenReader) emitOptionalValue(rest string) (int, error) {
+	if rest == "" {
+		return 0, nil
+	}
+	return 1, tr.emitPrimitive(rest)
+}
+
+func (tr *TOONTokenReader) pushObjectContainerWithCount(indent int, childCount int) {
+	tr.stack = append(tr.stack, containerInfo{
+		kind:       containerObject,
+		indent:     indent + 1,
+		childCount: childCount,
+	})
+}
+
+func (tr *TOONTokenReader) processListScalar(content string, top *containerInfo) error {
+	if err := tr.emitPrimitive(content); err != nil {
+		return err
+	}
 	top.index++
 	return nil
 }
 
 func (tr *TOONTokenReader) processInlineArrayInList(header toonParsedHeader, listIdx int) error {
-	delimiter := header.delimiter.toRune()
 	if header.inlineValues != "" {
-		raw, err := splitInlineValues(header.inlineValues, delimiter)
-		if err != nil {
+		if err := tr.emitInlineArray(header.inlineValues, header.delimiter.toRune()); err != nil {
 			return err
-		}
-		for i, token := range raw {
-			tr.path = append(tr.path, i)
-			value, err := decodePrimitiveToken(token)
-			if err != nil {
-				return err
-			}
-			tr.emitLeaf(value)
-			tr.path = tr.path[:len(tr.path)-1]
-		}
-		if len(raw) > 0 {
-			tr.path = append(tr.path, len(raw)-1)
-			tr.emitTruncate()
-			tr.path = tr.path[:len(tr.path)-1]
-		} else {
-			tr.emit([]any{tr.copyPath(), []any{}})
 		}
 	}
 	tr.stack[listIdx].index++
@@ -429,34 +497,48 @@ func (tr *TOONTokenReader) processInlineArrayInList(header toonParsedHeader, lis
 }
 
 func (tr *TOONTokenReader) processTabularRow(_ int, content string, top *containerInfo) error {
-	trimmed := strings.TrimSpace(content)
 	tr.path[len(tr.path)-1] = top.index
-
-	raw, err := splitInlineValues(trimmed, top.delimiter)
+	raw, err := splitInlineValues(strings.TrimSpace(content), top.delimiter)
 	if err != nil {
 		return err
 	}
+	return tr.emitTabularFields(top, raw)
+}
 
-	for i, field := range top.fields {
+func (tr *TOONTokenReader) emitTabularFields(top *containerInfo, raw []string) error {
+	if err := tr.emitFieldValues(top.fields, raw); err != nil {
+		return err
+	}
+	tr.emitTabularRowClose(top.fields)
+	top.index++
+	return nil
+}
+
+func (tr *TOONTokenReader) emitFieldValues(fields, raw []string) error {
+	for i, field := range fields {
 		if i >= len(raw) {
 			break
 		}
-		tr.path = append(tr.path, field)
-		value, err := decodePrimitiveToken(raw[i])
-		if err != nil {
+		if err := tr.emitNamedField(field, raw[i]); err != nil {
 			return err
 		}
-		tr.emitLeaf(value)
-		tr.path = tr.path[:len(tr.path)-1]
 	}
-
-	if len(top.fields) > 0 {
-		lastField := top.fields[len(top.fields)-1]
-		tr.path = append(tr.path, lastField)
-		tr.emitTruncate()
-		tr.path = tr.path[:len(tr.path)-1]
-	}
-
-	top.index++
 	return nil
+}
+
+func (tr *TOONTokenReader) emitNamedField(name, token string) error {
+	tr.path = append(tr.path, name)
+	err := tr.emitPrimitive(token)
+	tr.path = tr.path[:len(tr.path)-1]
+	return err
+}
+
+func (tr *TOONTokenReader) emitTabularRowClose(fields []string) {
+	if len(fields) == 0 {
+		return
+	}
+	lastField := fields[len(fields)-1]
+	tr.path = append(tr.path, lastField)
+	tr.emitTruncate()
+	tr.path = tr.path[:len(tr.path)-1]
 }
