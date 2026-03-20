@@ -17,15 +17,23 @@ const (
 // Everything else is assumed to be TOON.
 func Detect(data []byte) Format {
 	for _, b := range data {
-		switch b {
-		case ' ', '\t', '\n', '\r':
+		if isWhitespace(b) {
 			continue
-		case '{', '[', '"', 't', 'f', 'n', '-',
-			'0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-			return JSON
-		default:
-			return TOON
 		}
+		return classifyByte(b)
+	}
+	return TOON
+}
+
+func isWhitespace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
+}
+
+func classifyByte(b byte) Format {
+	switch b {
+	case '{', '[', '"', 't', 'f', 'n', '-',
+		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		return JSON
 	}
 	return TOON
 }

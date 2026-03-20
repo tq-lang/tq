@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 
 	"github.com/toon-format/toon-go"
@@ -33,25 +34,19 @@ type Reader struct {
 func NewReader(r io.Reader) *Reader {
 	br := bufio.NewReader(r)
 	format := detect.DetectReader(br)
+	sr := &Reader{format: format, underlying: br, firstRead: true}
+	sr.initDecoder(br, format)
+	return sr
+}
 
-	sr := &Reader{
-		format:     format,
-		underlying: br,
-		firstRead:  true,
-	}
-
+func (sr *Reader) initDecoder(br *bufio.Reader, format detect.Format) {
 	if format == detect.JSON {
-		// Capture bytes via TeeReader for possible TOON fallback. The capture
-		// is bounded: it only grows until the first Decode call succeeds or
-		// fails, after which the TeeReader is discarded.
 		sr.captured = &bytes.Buffer{}
 		tee := io.TeeReader(br, sr.captured)
 		sr.jsonDec = json.NewDecoder(tee)
 	} else {
 		sr.scanner = bufio.NewScanner(br)
 	}
-
-	return sr
 }
 
 // NewTOONReader creates a reader that parses TOON documents without format
@@ -80,36 +75,35 @@ func (sr *Reader) Next() (any, bool, error) {
 }
 
 func (sr *Reader) nextJSON() (any, bool, error) {
-	// Use Decode directly instead of More() — More() is designed for values
-	// inside JSON arrays/objects, not top-level concatenated streams where
-	// buffer-boundary splits could cause premature EOF detection.
 	var v any
 	if err := sr.jsonDec.Decode(&v); err != nil {
-		if err == io.EOF {
-			sr.done = true
-			return nil, false, nil
-		}
-		if sr.firstRead {
-			// First decode failed — input was misdetected as JSON.
-			// Fall back to TOON using the captured bytes + remaining reader.
-			sr.fallbackToTOON()
-			return sr.nextTOON()
-		}
-		sr.done = true
-		return nil, false, err
+		return sr.handleJSONDecodeErr(err)
 	}
-
-	if sr.firstRead {
-		sr.firstRead = false
-		// First decode succeeded — discard the TeeReader to stop capturing.
-		// This is safe because the old decoder is replaced: Buffered() returns
-		// any look-ahead data already read, and underlying has the rest.
-		remaining := io.MultiReader(sr.jsonDec.Buffered(), sr.underlying)
-		sr.jsonDec = json.NewDecoder(remaining)
-		sr.captured = nil
-	}
-
+	sr.finalizeFirstRead()
 	return v, true, nil
+}
+
+func (sr *Reader) handleJSONDecodeErr(err error) (any, bool, error) {
+	if errors.Is(err, io.EOF) {
+		sr.done = true
+		return nil, false, nil
+	}
+	if sr.firstRead {
+		sr.fallbackToTOON()
+		return sr.nextTOON()
+	}
+	sr.done = true
+	return nil, false, err
+}
+
+func (sr *Reader) finalizeFirstRead() {
+	if !sr.firstRead {
+		return
+	}
+	sr.firstRead = false
+	remaining := io.MultiReader(sr.jsonDec.Buffered(), sr.underlying)
+	sr.jsonDec = json.NewDecoder(remaining)
+	sr.captured = nil
 }
 
 // fallbackToTOON switches from JSON mode to TOON mode, reconstructing
@@ -126,37 +120,35 @@ func (sr *Reader) fallbackToTOON() {
 }
 
 func (sr *Reader) nextTOON() (any, bool, error) {
-	// Accumulate lines until we hit a blank line (document separator) or EOF.
-	// A blank line between non-empty content separates documents.
-	// Note: only truly empty lines ("") act as separators; lines containing
-	// only whitespace (spaces/tabs) are treated as content.
 	sr.buf.Reset()
-	hasContent := false
+	separated, hasContent := sr.scanTOONLines()
+	if separated {
+		return sr.decodeTOONBuffer()
+	}
+	return sr.finalizeTOON(hasContent)
+}
 
+func (sr *Reader) scanTOONLines() (separated bool, hasContent bool) {
 	for sr.scanner.Scan() {
 		line := sr.scanner.Text()
-
 		if line == "" && hasContent {
-			// Blank line after content = document boundary.
-			return sr.decodeTOONBuffer()
+			return true, true
 		}
-
 		if line != "" {
 			hasContent = true
 		}
-
 		sr.buf.WriteString(line)
 		sr.buf.WriteByte('\n')
 	}
+	return false, hasContent
+}
 
+func (sr *Reader) finalizeTOON(hasContent bool) (any, bool, error) {
 	if err := sr.scanner.Err(); err != nil {
 		sr.done = true
 		return nil, false, err
 	}
-
 	sr.done = true
-
-	// EOF reached — decode whatever we accumulated.
 	if !hasContent {
 		return nil, false, nil
 	}
