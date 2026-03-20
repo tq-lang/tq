@@ -219,7 +219,8 @@ func (tr *TokenReader) handleArrayValue(token json.Token) (any, bool) {
 func (tr *TokenReader) handleNonArrayValue(token json.Token) (any, bool) {
 	s := tr.currentState()
 	if s == stateObjectStart || s == stateObjectValue {
-		return tr.handleObjectKey(token), false
+		tr.pushObjectKey(token)
+		return nil, false
 	}
 	return tr.emitLeafValue(token, s)
 }
@@ -233,10 +234,9 @@ func (tr *TokenReader) emitLeafValue(token json.Token, s int) (any, bool) {
 	return tr.emitPair(token), true
 }
 
-func (tr *TokenReader) handleObjectKey(token json.Token) any {
+func (tr *TokenReader) pushObjectKey(token json.Token) {
 	tr.setState(stateObjectKey)
 	tr.path = append(tr.path, token)
-	return nil
 }
 
 func (tr *TokenReader) emitPair(token json.Token) any {

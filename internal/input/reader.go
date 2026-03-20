@@ -132,19 +132,21 @@ func (sr *Reader) nextTOON() (any, bool, error) {
 	return sr.finalizeTOON(hasContent)
 }
 
-func (sr *Reader) scanTOONLines() (separated bool, hasContent bool) {
+func (sr *Reader) scanTOONLines() (separated, hasContent bool) {
 	for sr.scanner.Scan() {
 		line := sr.scanner.Text()
 		if line == "" && hasContent {
 			return true, true
 		}
-		if line != "" {
-			hasContent = true
-		}
-		sr.buf.WriteString(line)
-		sr.buf.WriteByte('\n')
+		hasContent = sr.appendLine(line, hasContent)
 	}
 	return false, hasContent
+}
+
+func (sr *Reader) appendLine(line string, hadContent bool) bool {
+	sr.buf.WriteString(line)
+	sr.buf.WriteByte('\n')
+	return hadContent || line != ""
 }
 
 func (sr *Reader) finalizeTOON(hasContent bool) (any, bool, error) {

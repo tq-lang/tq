@@ -85,7 +85,7 @@ linters:
     forbidigo:
       analyze-types: true
     maintidx:
-      under: 20
+      under: 60
     nolintlint:
       require-explanation: true
       require-specific: true
@@ -104,11 +104,12 @@ linters:
           - goconst
           - dupl
           - funlen
+          - maintidx
       # CLI tool intentionally opens user-provided files.
       - linters:
           - gosec
         text: "G304"
-        path: cmd/tq/main\.go
+        path: cmd/tq/
       # Integer overflow in Maxrss/HeapInuse conversions is safe.
       - linters:
           - gosec

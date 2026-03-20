@@ -95,8 +95,8 @@ func checkVarPairArgs(args []string, i int, a string) error {
 	return nil
 }
 
-func (e *varArgExtractor) appendVarPair(flag, name, value string) {
-	if flag == "--arg" {
+func (e *varArgExtractor) appendVarPair(flagName, name, value string) {
+	if flagName == "--arg" {
 		e.argPairs = append(e.argPairs, name, value)
 	} else {
 		e.argjsonPairs = append(e.argjsonPairs, name, value)

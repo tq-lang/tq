@@ -18,8 +18,8 @@ func resolveFilter(cfg *config, args []string) (string, []string, int) {
 	return resolveFilterFromArgs(args)
 }
 
-func resolveFilterFromFile(path string, args []string) (string, []string, int) {
-	data, err := os.ReadFile(path)
+func resolveFilterFromFile(fromFile string, args []string) (string, []string, int) {
+	data, err := os.ReadFile(fromFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tq: %v\n", err)
 		return "", nil, exitUsage
@@ -71,8 +71,10 @@ func varCompilerOpts(varNames []string) []gojq.CompilerOption {
 }
 
 func collectVars(args, argsJSON []keyValue) ([]string, []any) {
-	all := append(args, argsJSON...)
-	return extractNamesValues(all)
+	combined := make([]keyValue, 0, len(args)+len(argsJSON))
+	combined = append(combined, args...)
+	combined = append(combined, argsJSON...)
+	return extractNamesValues(combined)
 }
 
 func extractNamesValues(kvs []keyValue) ([]string, []any) {
