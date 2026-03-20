@@ -31,58 +31,128 @@ type config struct {
 	argjsonPairs    []string
 }
 
+type varArgExtractor struct {
+	remaining    []string
+	argPairs     []string
+	argjsonPairs []string
+}
+
 // extractVarArgs scans args for --arg/--argjson NAME VALUE (jq-style two-positional-arg syntax),
 // collects the pairs, and returns the remaining args for pflag.
 func extractVarArgs(args []string) (remaining, argPairs, argjsonPairs []string, err error) {
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if a == "--" {
-			remaining = append(remaining, args[i:]...)
-			break
-		}
-		if a == "--arg" || a == "--argjson" {
-			if i+2 >= len(args) {
-				return nil, nil, nil, fmt.Errorf("tq: --%s requires NAME and VALUE arguments", strings.TrimPrefix(a, "--"))
-			}
-			name := args[i+1]
-			value := args[i+2]
-			if a == "--arg" {
-				argPairs = append(argPairs, name, value)
-			} else {
-				argjsonPairs = append(argjsonPairs, name, value)
-			}
-			i += 2
-			continue
-		}
-		remaining = append(remaining, a)
+	var ext varArgExtractor
+	if err := ext.extract(args); err != nil {
+		return nil, nil, nil, err
 	}
-	return remaining, argPairs, argjsonPairs, nil
+	return ext.remaining, ext.argPairs, ext.argjsonPairs, nil
+}
+
+func (e *varArgExtractor) extract(args []string) error {
+	for i := 0; i < len(args); i++ {
+		n, stop, err := e.step(args, i)
+		if err != nil || stop {
+			return err
+		}
+		i += n
+	}
+	return nil
+}
+
+func (e *varArgExtractor) step(args []string, i int) (int, bool, error) {
+	if args[i] == "--" {
+		e.remaining = append(e.remaining, args[i:]...)
+		return 0, true, nil
+	}
+	n, err := e.processArg(args, i)
+	return n, false, err
+}
+
+func (e *varArgExtractor) processArg(args []string, i int) (int, error) {
+	a := args[i]
+	if !isVarFlag(a) {
+		e.remaining = append(e.remaining, a)
+		return 0, nil
+	}
+	return e.consumeVarPair(args, i, a)
+}
+
+func isVarFlag(a string) bool {
+	return a == "--arg" || a == "--argjson"
+}
+
+func (e *varArgExtractor) consumeVarPair(args []string, i int, a string) (int, error) {
+	if err := checkVarPairArgs(args, i, a); err != nil {
+		return 0, err
+	}
+	e.appendVarPair(a, args[i+1], args[i+2])
+	return 2, nil
+}
+
+func checkVarPairArgs(args []string, i int, a string) error {
+	if i+2 >= len(args) {
+		return fmt.Errorf("tq: --%s requires NAME and VALUE arguments", strings.TrimPrefix(a, "--"))
+	}
+	return nil
+}
+
+func (e *varArgExtractor) appendVarPair(flag, name, value string) {
+	if flag == "--arg" {
+		e.argPairs = append(e.argPairs, name, value)
+	} else {
+		e.argjsonPairs = append(e.argjsonPairs, name, value)
+	}
 }
 
 func parseFlags() (*config, []string) {
 	cfg := &config{}
+	registerOutputFlags(cfg)
+	registerInputFlags(cfg)
+	registerStreamFlags(cfg)
+	registerOtherFlags(cfg)
+	flag.Usage = printUsage
+	return parseFlagArgs(cfg)
+}
 
+func registerOutputFlags(cfg *config) {
+	registerFormatFlags(cfg)
+	flag.BoolVar(&cfg.tab, "tab", false, "")
+	flag.IntVar(&cfg.indent, "indent", 0, "")
+	flag.StringVar(&cfg.delimiter, "delimiter", "", "")
+}
+
+func registerFormatFlags(cfg *config) {
 	flag.BoolVar(&cfg.jsonOutput, "json", false, "")
 	flag.BoolVar(&cfg.toonOutput, "toon", false, "")
 	flag.BoolVarP(&cfg.rawOutput, "raw-output", "r", false, "")
 	flag.BoolVarP(&cfg.compact, "compact-output", "c", false, "")
 	flag.BoolVarP(&cfg.joinOutput, "join-output", "j", false, "")
-	flag.BoolVar(&cfg.tab, "tab", false, "")
-	flag.IntVar(&cfg.indent, "indent", 0, "")
-	flag.StringVar(&cfg.delimiter, "delimiter", "", "")
+}
+
+func registerInputFlags(cfg *config) {
 	flag.BoolVarP(&cfg.slurp, "slurp", "s", false, "")
 	flag.BoolVarP(&cfg.nullInput, "null-input", "n", false, "")
 	flag.StringVarP(&cfg.fromFile, "from-file", "f", "", "")
+}
+
+func registerStreamFlags(cfg *config) {
 	flag.BoolVar(&cfg.stream, "stream", false, "")
 	flag.BoolVar(&cfg.noStream, "no-stream", false, "")
 	flag.StringVar(&cfg.streamThreshold, "stream-threshold", "", "")
+}
+
+func registerOtherFlags(cfg *config) {
 	flag.BoolVarP(&cfg.exitStatus, "exit-status", "e", false, "")
 	flag.BoolVarP(&cfg.quiet, "quiet", "q", false, "")
 	flag.BoolVar(&cfg.version, "version", false, "")
+}
 
-	flag.Usage = printUsage
+func parseFlagArgs(cfg *config) (*config, []string) {
+	remaining := extractAndSetVarArgs(cfg)
+	_ = flag.CommandLine.Parse(remaining)
+	return cfg, flag.Args()
+}
 
-	// Extract --arg/--argjson before pflag parsing (jq-style two-arg syntax).
+func extractAndSetVarArgs(cfg *config) []string {
 	remaining, argPairs, argjsonPairs, err := extractVarArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -90,13 +160,10 @@ func parseFlags() (*config, []string) {
 	}
 	cfg.argPairs = argPairs
 	cfg.argjsonPairs = argjsonPairs
-
-	_ = flag.CommandLine.Parse(remaining)
-	return cfg, flag.Args()
+	return remaining
 }
 
-func printUsage() {
-	_, _ = fmt.Fprint(os.Stdout, `Usage: tq [flags] <filter> [file...]
+const usageText = `Usage: tq [flags] <filter> [file...]
 
 tq is a command-line TOON/JSON processor. Like jq, but for TOON.
 
@@ -142,5 +209,8 @@ Environment:
   TQ_STREAM_THRESHOLD          auto-stream threshold (e.g. 512MB, 1GB)
 
 Documentation: https://github.com/tq-lang/tq
-`)
+`
+
+func printUsage() {
+	_, _ = fmt.Fprint(os.Stdout, usageText)
 }

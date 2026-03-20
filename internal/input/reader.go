@@ -88,6 +88,10 @@ func (sr *Reader) handleJSONDecodeErr(err error) (any, bool, error) {
 		sr.done = true
 		return nil, false, nil
 	}
+	return sr.handleJSONError(err)
+}
+
+func (sr *Reader) handleJSONError(err error) (any, bool, error) {
 	if sr.firstRead {
 		sr.fallbackToTOON()
 		return sr.nextTOON()

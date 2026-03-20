@@ -198,23 +198,45 @@ func (tr *TokenReader) handleCloseObject() (any, bool) {
 // handleValue processes a non-delimiter token (string, number, bool, null).
 // Returns the emitted value and true if a value should be returned to the caller.
 func (tr *TokenReader) handleValue(token json.Token) (any, bool) {
-	switch tr.currentState() {
-	case stateArrayStart:
-		tr.setState(stateArrayValue)
-		return tr.emitPair(token), true
-	case stateArrayValue:
-		return tr.emitPair(token), true
-	case stateObjectStart, stateObjectValue:
-		tr.setState(stateObjectKey)
-		tr.path = append(tr.path, token)
-	case stateObjectKey:
-		tr.setState(stateObjectValue)
-		return tr.emitPair(token), true
-	default:
-		tr.setState(stateTopValue)
-		return tr.emitPair(token), true
+	if tr.isArrayContext() {
+		return tr.handleArrayValue(token)
 	}
-	return nil, false
+	return tr.handleNonArrayValue(token)
+}
+
+func (tr *TokenReader) isArrayContext() bool {
+	s := tr.currentState()
+	return s == stateArrayStart || s == stateArrayValue
+}
+
+func (tr *TokenReader) handleArrayValue(token json.Token) (any, bool) {
+	if tr.currentState() == stateArrayStart {
+		tr.setState(stateArrayValue)
+	}
+	return tr.emitPair(token), true
+}
+
+func (tr *TokenReader) handleNonArrayValue(token json.Token) (any, bool) {
+	s := tr.currentState()
+	if s == stateObjectStart || s == stateObjectValue {
+		return tr.handleObjectKey(token), false
+	}
+	return tr.emitLeafValue(token, s)
+}
+
+func (tr *TokenReader) emitLeafValue(token json.Token, s int) (any, bool) {
+	if s == stateObjectKey {
+		tr.setState(stateObjectValue)
+	} else {
+		tr.setState(stateTopValue)
+	}
+	return tr.emitPair(token), true
+}
+
+func (tr *TokenReader) handleObjectKey(token json.Token) any {
+	tr.setState(stateObjectKey)
+	tr.path = append(tr.path, token)
+	return nil
 }
 
 func (tr *TokenReader) emitPair(token json.Token) any {

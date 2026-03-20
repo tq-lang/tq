@@ -83,15 +83,21 @@ func writeTOON(w io.Writer, v any, opts Options) error {
 
 func buildTOONOpts(opts Options) []toon.EncoderOption {
 	var encoderOpts []toon.EncoderOption
-	if opts.Tab {
-		encoderOpts = append(encoderOpts, toon.WithIndent(0))
-	} else if opts.Indent > 0 {
-		encoderOpts = append(encoderOpts, toon.WithIndent(opts.Indent))
-	}
+	encoderOpts = appendIndentOpt(encoderOpts, opts)
 	if opts.Delimiter != 0 {
 		encoderOpts = append(encoderOpts, toon.WithArrayDelimiter(opts.Delimiter))
 	}
 	return encoderOpts
+}
+
+func appendIndentOpt(opts []toon.EncoderOption, o Options) []toon.EncoderOption {
+	if o.Tab {
+		return append(opts, toon.WithIndent(0))
+	}
+	if o.Indent > 0 {
+		return append(opts, toon.WithIndent(o.Indent))
+	}
+	return opts
 }
 
 func writeAndTerminate(w io.Writer, data []byte, join bool) error {

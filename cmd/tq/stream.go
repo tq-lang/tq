@@ -54,41 +54,42 @@ func resolveReader(r io.Reader, code *gojq.Code, sc *streamCfg) (valueIterator, 
 // byte immediately following the token is valid JSON context (whitespace, comma,
 // colon, bracket, or EOF).
 func isConfirmedJSON(br *bufio.Reader) bool {
-	format := detect.DetectReader(br)
-	if format == detect.TOON {
+	if detect.DetectReader(br) == detect.TOON {
 		return false
 	}
-
 	peeked, _ := br.Peek(br.Buffered())
 	if len(peeked) == 0 {
-		return true // empty input - TokenReader handles EOF gracefully
+		return true
 	}
+	return validateJSONToken(peeked)
+}
 
+func validateJSONToken(peeked []byte) bool {
 	testDec := json.NewDecoder(bytes.NewReader(peeked))
 	if _, err := testDec.Token(); err != nil {
 		return false
 	}
+	return isValidJSONContext(peeked[int(testDec.InputOffset()):])
+}
 
-	// Check that the byte right after the decoded token is valid in a JSON
-	// context. This catches "true_value:" where Token() happily returns true
-	// but the trailing '_' proves it's not actually JSON.
-	offset := int(testDec.InputOffset())
-	rest := peeked[offset:]
+func isValidJSONContext(rest []byte) bool {
 	for _, b := range rest {
-		switch b {
-		case ' ', '\t', '\n', '\r':
+		if b == ' ' || b == '\t' || b == '\n' || b == '\r' {
 			continue
-		case ',', ':', '[', ']', '{', '}', '"',
-			'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-			'-', 't', 'f', 'n':
-			return true
-		default:
-			return false
 		}
+		return isJSONFollowByte(b)
 	}
-	// All remaining peeked bytes were whitespace (or there were none after
-	// the token). This is valid JSON.
 	return true
+}
+
+func isJSONFollowByte(b byte) bool {
+	switch b {
+	case ',', ':', '[', ']', '{', '}', '"',
+		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+		'-', 't', 'f', 'n':
+		return true
+	}
+	return false
 }
 
 // shouldAutoStream returns true if filename refers to a file >= threshold bytes.
@@ -103,50 +104,70 @@ func shouldAutoStream(filename string, threshold int64) bool {
 	return info.Size() >= threshold
 }
 
+const defaultStreamThreshold = 256 * 1024 * 1024 // 256MB
+
 // resolveStreamThreshold determines the auto-stream threshold.
 // Priority: --stream-threshold flag > TQ_STREAM_THRESHOLD env > 256MB default.
 func resolveStreamThreshold(cfg *config) int64 {
-	if cfg.streamThreshold != "" {
-		if v, err := parseSize(cfg.streamThreshold); err == nil {
-			return v
-		}
-		fmt.Fprintf(os.Stderr, "tq: warning: invalid --stream-threshold %q, using default\n", cfg.streamThreshold)
+	if v, ok := parseFlagThreshold(cfg); ok {
+		return v
 	}
+	return resolveEnvThreshold()
+}
+
+func parseFlagThreshold(cfg *config) (int64, bool) {
+	if cfg.streamThreshold == "" {
+		return 0, false
+	}
+	v, err := parseSize(cfg.streamThreshold)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tq: warning: invalid --stream-threshold %q, using default\n", cfg.streamThreshold)
+		return 0, false
+	}
+	return v, true
+}
+
+func resolveEnvThreshold() int64 {
 	if env := os.Getenv("TQ_STREAM_THRESHOLD"); env != "" {
 		if v, err := parseSize(env); err == nil {
 			return v
 		}
 	}
-	return 256 * 1024 * 1024 // 256MB
+	return defaultStreamThreshold
+}
+
+type sizeUnit struct {
+	suffix string
+	mult   int64
+}
+
+var sizeUnits = []sizeUnit{
+	{"GB", 1024 * 1024 * 1024},
+	{"MB", 1024 * 1024},
+	{"KB", 1024},
+	{"B", 1},
 }
 
 // parseSize parses a human-readable size string like "256MB", "1GB".
 func parseSize(s string) (int64, error) {
-	s = strings.TrimSpace(s)
-	s = strings.ToUpper(s)
-
-	multipliers := []struct {
-		suffix string
-		mult   int64
-	}{
-		{"GB", 1024 * 1024 * 1024},
-		{"MB", 1024 * 1024},
-		{"KB", 1024},
-		{"B", 1},
-	}
-
-	for _, m := range multipliers {
-		if strings.HasSuffix(s, m.suffix) {
-			numStr := strings.TrimSpace(s[:len(s)-len(m.suffix)])
-			var n int64
-			if _, err := fmt.Sscanf(numStr, "%d", &n); err != nil {
-				return 0, fmt.Errorf("invalid size: %s", s)
-			}
-			return n * m.mult, nil
+	s = strings.ToUpper(strings.TrimSpace(s))
+	for _, u := range sizeUnits {
+		if strings.HasSuffix(s, u.suffix) {
+			return parseSizeWithUnit(s, u)
 		}
 	}
+	return scanInt64(s)
+}
 
-	// Plain number = bytes.
+func parseSizeWithUnit(s string, u sizeUnit) (int64, error) {
+	n, err := scanInt64(strings.TrimSpace(s[:len(s)-len(u.suffix)]))
+	if err != nil {
+		return 0, err
+	}
+	return n * u.mult, nil
+}
+
+func scanInt64(s string) (int64, error) {
 	var n int64
 	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
 		return 0, fmt.Errorf("invalid size: %s", s)
@@ -156,53 +177,76 @@ func parseSize(s string) (int64, error) {
 
 // formatSize returns a human-readable size string.
 func formatSize(n int64) string {
-	switch {
-	case n >= 1024*1024*1024:
-		return fmt.Sprintf("%dGB", n/(1024*1024*1024))
-	case n >= 1024*1024:
-		return fmt.Sprintf("%dMB", n/(1024*1024))
-	case n >= 1024:
-		return fmt.Sprintf("%dKB", n/1024)
-	default:
-		return fmt.Sprintf("%dB", n)
+	for _, u := range sizeUnits {
+		if u.suffix == "B" {
+			break
+		}
+		if n >= u.mult {
+			return fmt.Sprintf("%d%s", n/u.mult, u.suffix)
+		}
 	}
+	return fmt.Sprintf("%dB", n)
+}
+
+var nonStreamableBuiltins = []string{
+	"sort_by", "group_by", "unique_by", "min_by", "max_by",
+	"sort", "unique", "reverse", "transpose", "flatten",
+	"combinations", "walk",
 }
 
 // warnNonStreamable prints a warning for filter builtins that may not work
 // as expected in streaming mode where input is [path,value] pairs.
 func warnNonStreamable(filterExpr string) {
-	builtins := []string{
-		"sort_by", "group_by", "unique_by", "min_by", "max_by",
-		"sort", "unique", "reverse", "transpose", "flatten",
-		"combinations", "walk",
-	}
-	for _, name := range builtins {
-		if matchesBuiltin(filterExpr, name) {
-			fmt.Fprintf(os.Stderr,
-				"tq: warning: '%s' may not work as expected in streaming mode "+
-					"(input is [path,value] pairs, not the full document)\n", name)
-		}
+	for _, name := range nonStreamableBuiltins {
+		warnIfMatched(filterExpr, name)
 	}
 }
 
-// matchesBuiltin checks if filterExpr contains name as a whole word.
-func matchesBuiltin(filterExpr, name string) bool {
+func warnIfMatched(filterExpr, name string) {
+	if matchesBuiltin(filterExpr, name) {
+		fmt.Fprintf(os.Stderr,
+			"tq: warning: '%s' may not work as expected in streaming mode "+
+				"(input is [path,value] pairs, not the full document)\n", name)
+	}
+}
+
+// matchesBuiltin checks if expr contains name as a whole word.
+func matchesBuiltin(expr, name string) bool {
 	idx := 0
-	for {
-		pos := strings.Index(filterExpr[idx:], name)
-		if pos == -1 {
-			return false
-		}
-		pos += idx
-		before := pos - 1
-		after := pos + len(name)
-		beforeOK := before < 0 || !isIdentChar(filterExpr[before])
-		afterOK := after >= len(filterExpr) || !isIdentChar(filterExpr[after])
-		if beforeOK && afterOK {
+	for idx >= 0 {
+		idx = matchBuiltinAt(expr, name, idx)
+		if idx == -2 {
 			return true
 		}
-		idx = pos + len(name)
 	}
+	return false
+}
+
+// matchBuiltinAt returns next search offset, -1 if not found, -2 if matched.
+func matchBuiltinAt(expr, name string, idx int) int {
+	pos := findSubstr(expr, name, idx)
+	if pos < 0 {
+		return -1
+	}
+	if isWholeWord(expr, pos, len(name)) {
+		return -2
+	}
+	return pos + len(name)
+}
+
+func findSubstr(s, sub string, offset int) int {
+	pos := strings.Index(s[offset:], sub)
+	if pos < 0 {
+		return -1
+	}
+	return pos + offset
+}
+
+func isWholeWord(s string, pos, nameLen int) bool {
+	beforeOK := pos == 0 || !isIdentChar(s[pos-1])
+	after := pos + nameLen
+	afterOK := after >= len(s) || !isIdentChar(s[after])
+	return beforeOK && afterOK
 }
 
 func isIdentChar(b byte) bool {
