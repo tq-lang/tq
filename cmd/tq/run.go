@@ -167,9 +167,12 @@ func buildOutputOpts(cfg *config) (output.Options, int) {
 
 func newOutputOpts(cfg *config, delim toon.Delimiter) output.Options {
 	return output.Options{
-		JSON: cfg.jsonOutput, Raw: cfg.rawOutput,
-		Compact: cfg.compact, Tab: cfg.tab,
-		Indent: cfg.indent, Join: cfg.joinOutput,
+		JSON:      cfg.jsonOutput,
+		Raw:       cfg.rawOutput,
+		Compact:   cfg.compact,
+		Tab:       cfg.tab,
+		Indent:    cfg.indent,
+		Join:      cfg.joinOutput,
 		Delimiter: delim,
 	}
 }

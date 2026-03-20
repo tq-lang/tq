@@ -188,21 +188,21 @@ func looksNumeric(s string) bool {
 	if s == "" {
 		return false
 	}
-	i := skipLeadingMinus(s)
-	if i < 0 {
+	i, ok := skipLeadingMinus(s)
+	if !ok {
 		return false
 	}
 	return scanNumber(s, i) == len(s)
 }
 
-func skipLeadingMinus(s string) int {
+func skipLeadingMinus(s string) (int, bool) {
 	if s[0] != '-' {
-		return 0
+		return 0, true
 	}
 	if len(s) == 1 {
-		return -1
+		return 0, false
 	}
-	return 1
+	return 1, true
 }
 
 func scanNumber(s string, i int) int {

@@ -214,24 +214,26 @@ func warnIfMatched(filterExpr, name string) {
 func matchesBuiltin(expr, name string) bool {
 	idx := 0
 	for idx >= 0 {
-		idx = matchBuiltinAt(expr, name, idx)
-		if idx == -2 {
+		var found bool
+		idx, found = matchBuiltinAt(expr, name, idx)
+		if found {
 			return true
 		}
 	}
 	return false
 }
 
-// matchBuiltinAt returns next search offset, -1 if not found, -2 if matched.
-func matchBuiltinAt(expr, name string, idx int) int {
+// matchBuiltinAt searches for name starting at idx.
+// Returns (nextOffset, found) where nextOffset < 0 means no more occurrences.
+func matchBuiltinAt(expr, name string, idx int) (int, bool) {
 	pos := findSubstr(expr, name, idx)
 	if pos < 0 {
-		return -1
+		return -1, false
 	}
 	if isWholeWord(expr, pos, len(name)) {
-		return -2
+		return -1, true
 	}
-	return pos + len(name)
+	return pos + len(name), false
 }
 
 func findSubstr(s, sub string, offset int) int {

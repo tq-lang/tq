@@ -161,19 +161,19 @@ func (tr *TOONTokenReader) advance() error {
 		if !ok {
 			return tr.scannerEOF()
 		}
-		if err, handled := tr.processIfContent(line); handled {
+		if handled, err := tr.processIfContent(line); handled {
 			return err
 		}
 	}
 }
 
-func (tr *TOONTokenReader) processIfContent(line string) (error, bool) {
+func (tr *TOONTokenReader) processIfContent(line string) (bool, error) {
 	indent, content, skip := tr.parseLine(line)
 	if skip {
-		return nil, false
+		return false, nil
 	}
 	tr.handleDedent(indent)
-	return tr.dispatchLine(indent, content), true
+	return true, tr.dispatchLine(indent, content)
 }
 
 func (tr *TOONTokenReader) scannerEOF() error {

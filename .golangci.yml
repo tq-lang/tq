@@ -109,7 +109,7 @@ linters:
       - linters:
           - gosec
         text: "G304"
-        path: cmd/tq/
+        path: cmd/tq/(processing|filter)\.go
       # Integer overflow in Maxrss/HeapInuse conversions is safe.
       - linters:
           - gosec
