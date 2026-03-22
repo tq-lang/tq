@@ -8,69 +8,139 @@ import (
 	"unicode"
 )
 
+// quoteState tracks whether a scanner is inside a quoted string.
+type quoteState struct {
+	inQuotes bool
+	escaped  bool
+}
+
+func (qs *quoteState) process(r rune) {
+	switch {
+	case qs.escaped:
+		qs.escaped = false
+	case r == '\\' && qs.inQuotes:
+		qs.escaped = true
+	case r == '"':
+		qs.inQuotes = !qs.inQuotes
+	}
+}
+
 // indexOutsideQuotes finds the first occurrence of target not inside quotes.
 func indexOutsideQuotes(s string, target rune) int {
-	inQuotes := false
-	escaped := false
+	var qs quoteState
 	for idx, r := range s {
-		switch {
-		case escaped:
-			escaped = false
-		case r == '\\' && inQuotes:
-			escaped = true
-		case r == '"':
-			inQuotes = !inQuotes
-		case !inQuotes && r == target:
+		if !qs.inQuotes && !qs.escaped && r == target {
 			return idx
 		}
+		qs.process(r)
 	}
 	return -1
 }
 
 // unquoteString removes surrounding quotes and unescapes TOON strings.
 func unquoteString(token string) (string, error) {
+	if err := validateQuotedString(token); err != nil {
+		return "", err
+	}
+	return unescapeInner(token[1 : len(token)-1])
+}
+
+func validateQuotedString(token string) error {
 	if len(token) < 2 || token[0] != '"' || token[len(token)-1] != '"' {
-		return "", errors.New("invalid quoted string")
+		return errors.New("invalid quoted string")
 	}
-	var b strings.Builder
-	b.Grow(len(token) - 2)
-	escaped := false
-	for i := 1; i < len(token)-1; i++ {
-		ch := token[i]
-		if escaped {
-			if err := writeEscape(&b, ch); err != nil {
-				return "", err
-			}
-			escaped = false
-			continue
-		}
-		if ch == '\\' {
-			escaped = true
-			continue
-		}
-		b.WriteByte(ch)
+	return nil
+}
+
+type unescaper struct {
+	b       strings.Builder
+	escaped bool
+}
+
+func (u *unescaper) processByte(ch byte) error {
+	if u.escaped {
+		u.escaped = false
+		return writeEscape(&u.b, ch)
 	}
-	if escaped {
+	if ch == '\\' {
+		u.escaped = true
+		return nil
+	}
+	u.b.WriteByte(ch)
+	return nil
+}
+
+func unescapeInner(inner string) (string, error) {
+	u := &unescaper{}
+	u.b.Grow(len(inner))
+	if err := u.processAll(inner); err != nil {
+		return "", err
+	}
+	return u.result()
+}
+
+func (u *unescaper) processAll(s string) error {
+	for i := range len(s) {
+		if err := u.processByte(s[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u *unescaper) result() (string, error) {
+	if u.escaped {
 		return "", errors.New("unterminated escape sequence")
 	}
-	return b.String(), nil
+	return u.b.String(), nil
+}
+
+var escapeMap = map[byte]byte{
+	'\\': '\\', '"': '"',
+	'n': '\n', 'r': '\r', 't': '\t',
 }
 
 // writeEscape writes the unescaped byte for a backslash escape sequence.
 func writeEscape(b *strings.Builder, ch byte) error {
-	switch ch {
-	case '\\', '"':
-		b.WriteByte(ch)
-	case 'n':
-		b.WriteByte('\n')
-	case 'r':
-		b.WriteByte('\r')
-	case 't':
-		b.WriteByte('\t')
-	default:
-		return fmt.Errorf("invalid escape sequence \\%c", ch)
+	if out, ok := escapeMap[ch]; ok {
+		b.WriteByte(out)
+		return nil
 	}
-	return nil
+	return fmt.Errorf("invalid escape sequence \\%c", ch)
+}
+
+// inlineSplitter holds state for splitting delimiter-separated values.
+type inlineSplitter struct {
+	delimiter rune
+	tokens    []string
+	current   strings.Builder
+	qs        quoteState
+}
+
+func (sp *inlineSplitter) processRune(r rune) {
+	if sp.isQuoteRelated(r) {
+		sp.writeAndAdvance(r)
+		return
+	}
+	if r == sp.delimiter && !sp.qs.inQuotes {
+		sp.flush()
+		return
+	}
+	sp.current.WriteRune(r)
+}
+
+func (sp *inlineSplitter) isQuoteRelated(r rune) bool {
+	return sp.qs.escaped || (r == '\\' && sp.qs.inQuotes) || r == '"'
+}
+
+func (sp *inlineSplitter) writeAndAdvance(r rune) {
+	sp.current.WriteRune(r)
+	sp.qs.process(r)
+}
+
+func (sp *inlineSplitter) flush() {
+	sp.tokens = append(sp.tokens, strings.TrimSpace(sp.current.String()))
+	sp.current.Reset()
 }
 
 // splitInlineValues tokenizes a delimiter-separated list, respecting quotes.
@@ -78,34 +148,19 @@ func splitInlineValues(segment string, delimiter rune) ([]string, error) {
 	if strings.TrimSpace(segment) == "" {
 		return nil, nil
 	}
-	var tokens []string
-	var current strings.Builder
-	inQuotes := false
-	escaped := false
+	return splitWithDelimiter(segment, delimiter)
+}
 
+func splitWithDelimiter(segment string, delimiter rune) ([]string, error) {
+	sp := inlineSplitter{delimiter: delimiter}
 	for _, r := range segment {
-		switch {
-		case escaped:
-			current.WriteRune(r)
-			escaped = false
-		case r == '\\' && inQuotes:
-			current.WriteRune(r)
-			escaped = true
-		case r == '"':
-			current.WriteRune(r)
-			inQuotes = !inQuotes
-		case r == delimiter && !inQuotes:
-			tokens = append(tokens, strings.TrimSpace(current.String()))
-			current.Reset()
-		default:
-			current.WriteRune(r)
-		}
+		sp.processRune(r)
 	}
-	if inQuotes {
+	if sp.qs.inQuotes {
 		return nil, errors.New("unterminated string in delimited values")
 	}
-	tokens = append(tokens, strings.TrimSpace(current.String()))
-	return tokens, nil
+	sp.flush()
+	return sp.tokens, nil
 }
 
 // isValidUnquotedKey reports whether key satisfies the identifier pattern.
@@ -114,17 +169,18 @@ func isValidUnquotedKey(key string) bool {
 		return false
 	}
 	for pos, r := range key {
-		if pos == 0 {
-			if r != '_' && !unicode.IsLetter(r) {
-				return false
-			}
-			continue
-		}
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '.' {
+		if !isValidKeyRune(r, pos == 0) {
 			return false
 		}
 	}
 	return true
+}
+
+func isValidKeyRune(r rune, first bool) bool {
+	if first {
+		return r == '_' || unicode.IsLetter(r)
+	}
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.'
 }
 
 // looksNumeric reports whether s resembles a numeric literal.
@@ -132,21 +188,29 @@ func looksNumeric(s string) bool {
 	if s == "" {
 		return false
 	}
-	i := 0
-	if s[0] == '-' {
-		i++
-		if i == len(s) {
-			return false
-		}
-	}
-	n := scanDigits(s, i)
-	if n == 0 {
+	i, ok := skipLeadingMinus(s)
+	if !ok {
 		return false
 	}
-	i += n
-	i = scanFraction(s, i)
-	i = scanExponent(s, i)
-	return i == len(s)
+	return scanNumber(s, i) == len(s)
+}
+
+func skipLeadingMinus(s string) (int, bool) {
+	if s[0] != '-' {
+		return 0, true
+	}
+	if len(s) == 1 {
+		return 0, false
+	}
+	return 1, true
+}
+
+func scanNumber(s string, i int) int {
+	n := scanDigits(s, i)
+	if n == 0 {
+		return -1
+	}
+	return scanExponent(s, scanFraction(s, i+n))
 }
 
 // scanDigits returns the number of consecutive ASCII digits starting at pos.
@@ -172,19 +236,30 @@ func scanFraction(s string, i int) int {
 	return i + n
 }
 
+func isExponentStart(b byte) bool {
+	return b == 'e' || b == 'E'
+}
+
+func isSign(b byte) bool {
+	return b == '+' || b == '-'
+}
+
 // scanExponent advances past an exponent (e/E[+/-]NNN) if present.
-// Returns -1 if the exponent is malformed, otherwise the new position.
+// Returns len(s)+1 if the exponent is malformed, otherwise the new position.
 func scanExponent(s string, i int) int {
-	if i >= len(s) || (s[i] != 'e' && s[i] != 'E') {
+	if i >= len(s) || !isExponentStart(s[i]) {
 		return i
 	}
-	i++ // skip 'e'/'E'
-	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+	return scanExponentDigits(s, i+1)
+}
+
+func scanExponentDigits(s string, i int) int {
+	if i < len(s) && isSign(s[i]) {
 		i++
 	}
 	n := scanDigits(s, i)
 	if n == 0 {
-		return len(s) + 1 // malformed
+		return len(s) + 1
 	}
 	return i + n
 }
@@ -217,6 +292,10 @@ func decodeKeyToken(token string) (string, error) {
 	if token[0] == '"' {
 		return unquoteString(token)
 	}
+	return validateUnquotedKey(token)
+}
+
+func validateUnquotedKey(token string) (string, error) {
 	if !isValidUnquotedKey(token) {
 		return "", fmt.Errorf("invalid unquoted key %q", token)
 	}
@@ -231,28 +310,40 @@ func decodePrimitiveToken(token string) (any, error) {
 	if token[0] == '"' {
 		return unquoteString(token)
 	}
+	if v, ok := decodeLiteral(token); ok {
+		return v, nil
+	}
+	return decodeNumericOrString(token)
+}
+
+func decodeLiteral(token string) (any, bool) {
 	switch token {
 	case "true":
-		return true, nil
+		return true, true
 	case "false":
-		return false, nil
+		return false, true
 	case "null":
-		return nil, nil
+		return nil, true
 	}
-	if hasForbiddenLeadingZeros(token) {
+	return nil, false
+}
+
+func decodeNumericOrString(token string) (any, error) {
+	if hasForbiddenLeadingZeros(token) || !looksNumeric(token) {
 		return token, nil
 	}
-	if looksNumeric(token) {
-		num, err := strconv.ParseFloat(token, 64)
-		if err != nil {
-			return nil, err
-		}
-		if num == 0 {
-			num = 0
-		}
-		return num, nil
+	return parseFloat(token)
+}
+
+func parseFloat(token string) (any, error) {
+	num, err := strconv.ParseFloat(token, 64)
+	if err != nil {
+		return nil, err
 	}
-	return token, nil
+	if num == 0 {
+		num = 0
+	}
+	return num, nil
 }
 
 // splitKeyValue splits "key: value" into decoded key and raw value token.
@@ -261,6 +352,10 @@ func splitKeyValue(content string) (string, string, error) {
 	if colon == -1 {
 		return "", "", errors.New("missing colon after key")
 	}
+	return decodeKV(content, colon)
+}
+
+func decodeKV(content string, colon int) (string, string, error) {
 	keyToken := strings.TrimSpace(content[:colon])
 	valueToken := strings.TrimSpace(content[colon+1:])
 	key, err := decodeKeyToken(keyToken)
@@ -278,167 +373,26 @@ func isKeyValue(content string) bool {
 // computeIndent returns the indent level and content portion of a line.
 // Uses the given indentSize (spaces per level).
 func computeIndent(line string, indentSize int) (int, string) {
-	spaces := 0
+	spaces := countLeadingSpaces(line)
+	if spaces == len(line) {
+		return 0, ""
+	}
+	return spacesToLevel(spaces, indentSize), line[spaces:]
+}
+
+func countLeadingSpaces(line string) int {
 	for i := range len(line) {
-		switch line[i] {
-		case ' ':
-			spaces++
-		case '\t':
-			spaces++
-		default:
-			if indentSize <= 0 {
-				return spaces, line[i:]
-			}
-			return spaces / indentSize, line[i:]
+		if line[i] != ' ' && line[i] != '\t' {
+			return i
 		}
 	}
-	// All whitespace.
-	return 0, ""
+	return len(line)
 }
 
-type toonDelimiter int
-
-const (
-	toonDelimiterComma toonDelimiter = iota
-	toonDelimiterTab
-	toonDelimiterPipe
-)
-
-func (d toonDelimiter) toRune() rune {
-	switch d {
-	case toonDelimiterTab:
-		return '\t'
-	case toonDelimiterPipe:
-		return '|'
-	case toonDelimiterComma:
-		return ','
+func spacesToLevel(spaces, indentSize int) int {
+	if indentSize <= 0 {
+		return spaces
 	}
-	return ','
+	return spaces / indentSize
 }
 
-// toonParsedHeader holds parsed array header info.
-type toonParsedHeader struct {
-	key          string
-	length       int
-	delimiter    toonDelimiter
-	fields       []string
-	inlineValues string
-}
-
-// tryParseHeader detects TOON array headers like "key[N]{fields}: values".
-func tryParseHeader(content string) (toonParsedHeader, bool, error) {
-	colon := indexOutsideQuotes(content, ':')
-	if colon == -1 {
-		return toonParsedHeader{}, false, nil
-	}
-	left := strings.TrimSpace(content[:colon])
-	right := strings.TrimSpace(content[colon+1:])
-	if left == "" {
-		return toonParsedHeader{}, false, nil
-	}
-	bracketStart := indexOutsideQuotes(left, '[')
-	if bracketStart == -1 {
-		return toonParsedHeader{}, false, nil
-	}
-	rest := left[bracketStart+1:]
-	bracketOffset := indexOutsideQuotes(rest, ']')
-	if bracketOffset == -1 {
-		return toonParsedHeader{}, false, errors.New("missing closing bracket in array header")
-	}
-
-	header, err := buildHeader(
-		strings.TrimSpace(left[:bracketStart]),
-		rest[:bracketOffset],
-		strings.TrimSpace(rest[bracketOffset+1:]),
-	)
-	if err != nil {
-		return toonParsedHeader{}, false, err
-	}
-	header.inlineValues = right
-	return header, true, nil
-}
-
-// buildHeader constructs a toonParsedHeader from the key, bracket, and field segments.
-func buildHeader(keyPart, bracketSegment, fieldSegment string) (toonParsedHeader, error) {
-	header := toonParsedHeader{delimiter: toonDelimiterComma}
-
-	if keyPart != "" {
-		key, err := decodeKeyToken(keyPart)
-		if err != nil {
-			return toonParsedHeader{}, err
-		}
-		header.key = key
-	}
-
-	length, delim, err := parseBracketSegment(bracketSegment)
-	if err != nil {
-		return toonParsedHeader{}, err
-	}
-	header.length = length
-	header.delimiter = delim
-
-	if fieldSegment != "" {
-		fields, err := parseFieldSegment(fieldSegment, delim.toRune())
-		if err != nil {
-			return toonParsedHeader{}, err
-		}
-		header.fields = fields
-	}
-	return header, nil
-}
-
-// parseFieldSegment parses a "{field1,field2}" segment into decoded field names.
-func parseFieldSegment(seg string, delim rune) ([]string, error) {
-	if !strings.HasPrefix(seg, "{") || !strings.HasSuffix(seg, "}") {
-		return nil, errors.New("invalid field segment in array header")
-	}
-	inner := seg[1 : len(seg)-1]
-	if inner == "" {
-		return nil, nil
-	}
-	rawFields, err := splitInlineValues(inner, delim)
-	if err != nil {
-		return nil, err
-	}
-	fields := make([]string, 0, len(rawFields))
-	for _, token := range rawFields {
-		field, err := decodeKeyToken(token)
-		if err != nil {
-			return nil, err
-		}
-		fields = append(fields, field)
-	}
-	return fields, nil
-}
-
-func parseBracketSegment(segment string) (int, toonDelimiter, error) {
-	segment = strings.TrimPrefix(segment, "#")
-	if segment == "" {
-		return 0, toonDelimiterComma, errors.New("missing array length")
-	}
-	var digits strings.Builder
-	delim := toonDelimiterComma
-	for _, r := range segment {
-		if unicode.IsDigit(r) {
-			digits.WriteRune(r)
-			continue
-		}
-		switch r {
-		case '\t':
-			delim = toonDelimiterTab
-		case '|':
-			delim = toonDelimiterPipe
-		default:
-			return 0, toonDelimiterComma, fmt.Errorf("invalid delimiter symbol %q", r)
-		}
-	}
-	lengthStr := digits.String()
-	if lengthStr == "" {
-		return 0, toonDelimiterComma, errors.New("missing digits in array length")
-	}
-	length, err := strconv.Atoi(lengthStr)
-	if err != nil {
-		return 0, toonDelimiterComma, err
-	}
-	return length, delim, nil
-}

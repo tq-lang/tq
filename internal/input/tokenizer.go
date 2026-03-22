@@ -51,49 +51,67 @@ func (tr *TokenReader) Next() (any, bool, error) {
 	if tr.done {
 		return nil, false, nil
 	}
+	return tr.nextOrFinish()
+}
+
+func (tr *TokenReader) nextOrFinish() (any, bool, error) {
 	v, err := tr.next()
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			tr.done = true
-			return nil, false, nil
-		}
-		tr.done = true
-		return nil, false, err
+		return tr.handleNextErr(err)
 	}
 	return v, true, nil
+}
+
+func (tr *TokenReader) handleNextErr(err error) (any, bool, error) {
+	tr.done = true
+	if errors.Is(err, io.EOF) {
+		return nil, false, nil
+	}
+	return nil, false, err
 }
 
 func (tr *TokenReader) next() (any, error) {
 	tr.cleanupEndStates()
 	tr.advanceSiblingPath()
+	return tr.readToken()
+}
 
+func (tr *TokenReader) readToken() (any, error) {
 	for {
 		token, err := tr.dec.Token()
 		if err != nil {
-			if errors.Is(err, io.EOF) && tr.states[len(tr.states)-1] != stateTopValue {
-				err = io.ErrUnexpectedEOF
-			}
-			return nil, err
+			return nil, tr.wrapEOF(err)
 		}
-
-		if d, ok := token.(json.Delim); ok {
-			if v, done := tr.handleDelim(d); done {
-				return v, nil
-			}
-		} else {
-			if v, done := tr.handleValue(token); done {
-				return v, nil
-			}
+		if v, done := tr.dispatchToken(token); done {
+			return v, nil
 		}
 	}
 }
 
+func (tr *TokenReader) wrapEOF(err error) error {
+	if errors.Is(err, io.EOF) && tr.currentState() != stateTopValue {
+		return io.ErrUnexpectedEOF
+	}
+	return err
+}
+
+func (tr *TokenReader) currentState() int {
+	return tr.states[len(tr.states)-1]
+}
+
+func (tr *TokenReader) dispatchToken(token json.Token) (any, bool) {
+	if d, ok := token.(json.Delim); ok {
+		return tr.handleDelim(d)
+	}
+	return tr.handleValue(token)
+}
+
 // cleanupEndStates pops completed container states.
 func (tr *TokenReader) cleanupEndStates() {
-	switch tr.states[len(tr.states)-1] {
+	switch tr.currentState() {
 	case stateArrayEnd, stateObjectEnd:
 		tr.path = tr.path[:len(tr.path)-1]
-		fallthrough
+		tr.states = tr.states[:len(tr.states)-1]
 	case stateArrayEmptyEnd, stateObjectEmptyEnd:
 		tr.states = tr.states[:len(tr.states)-1]
 	}
@@ -101,15 +119,24 @@ func (tr *TokenReader) cleanupEndStates() {
 
 // advanceSiblingPath updates the path index between sibling values.
 func (tr *TokenReader) advanceSiblingPath() {
-	if tr.dec.More() {
-		switch tr.states[len(tr.states)-1] {
-		case stateArrayValue:
-			idx, _ := tr.path[len(tr.path)-1].(int)
-			tr.path[len(tr.path)-1] = idx + 1
-		case stateObjectValue:
-			tr.path = tr.path[:len(tr.path)-1]
-		}
+	if !tr.dec.More() {
+		return
 	}
+	tr.advanceSiblingByState()
+}
+
+func (tr *TokenReader) advanceSiblingByState() {
+	switch tr.currentState() {
+	case stateArrayValue:
+		tr.incrementArrayIndex()
+	case stateObjectValue:
+		tr.path = tr.path[:len(tr.path)-1]
+	}
+}
+
+func (tr *TokenReader) incrementArrayIndex() {
+	idx, _ := tr.path[len(tr.path)-1].(int)
+	tr.path[len(tr.path)-1] = idx + 1
 }
 
 // handleDelim processes a JSON delimiter token ([, ], {, }).
@@ -117,57 +144,103 @@ func (tr *TokenReader) advanceSiblingPath() {
 func (tr *TokenReader) handleDelim(d json.Delim) (any, bool) {
 	switch d {
 	case '[', '{':
-		switch tr.states[len(tr.states)-1] {
-		case stateArrayStart:
-			tr.states[len(tr.states)-1] = stateArrayValue
-		case stateObjectKey:
-			tr.states[len(tr.states)-1] = stateObjectValue
-		}
-		if d == '[' {
-			tr.states = append(tr.states, stateArrayStart)
-			tr.path = append(tr.path, 0)
-		} else {
-			tr.states = append(tr.states, stateObjectStart)
-		}
+		tr.handleOpen(d)
 	case ']':
-		if tr.states[len(tr.states)-1] == stateArrayStart {
-			tr.states[len(tr.states)-1] = stateArrayEmptyEnd
-			tr.path = tr.path[:len(tr.path)-1]
-			return []any{tr.copyPath(), []any{}}, true
-		}
-		tr.states[len(tr.states)-1] = stateArrayEnd
-		return []any{tr.copyPath()}, true
+		return tr.handleCloseArray()
 	case '}':
-		if tr.states[len(tr.states)-1] == stateObjectStart {
-			tr.states[len(tr.states)-1] = stateObjectEmptyEnd
-			return []any{tr.copyPath(), map[string]any{}}, true
-		}
-		tr.states[len(tr.states)-1] = stateObjectEnd
-		return []any{tr.copyPath()}, true
+		return tr.handleCloseObject()
 	}
 	return nil, false
+}
+
+func (tr *TokenReader) handleOpen(d json.Delim) {
+	tr.promoteContainerState()
+	if d == '[' {
+		tr.states = append(tr.states, stateArrayStart)
+		tr.path = append(tr.path, 0)
+	} else {
+		tr.states = append(tr.states, stateObjectStart)
+	}
+}
+
+func (tr *TokenReader) promoteContainerState() {
+	switch tr.currentState() {
+	case stateArrayStart:
+		tr.setState(stateArrayValue)
+	case stateObjectKey:
+		tr.setState(stateObjectValue)
+	}
+}
+
+func (tr *TokenReader) setState(s int) {
+	tr.states[len(tr.states)-1] = s
+}
+
+func (tr *TokenReader) handleCloseArray() (any, bool) {
+	if tr.currentState() == stateArrayStart {
+		tr.setState(stateArrayEmptyEnd)
+		tr.path = tr.path[:len(tr.path)-1]
+		return []any{tr.copyPath(), []any{}}, true
+	}
+	tr.setState(stateArrayEnd)
+	return []any{tr.copyPath()}, true
+}
+
+func (tr *TokenReader) handleCloseObject() (any, bool) {
+	if tr.currentState() == stateObjectStart {
+		tr.setState(stateObjectEmptyEnd)
+		return []any{tr.copyPath(), map[string]any{}}, true
+	}
+	tr.setState(stateObjectEnd)
+	return []any{tr.copyPath()}, true
 }
 
 // handleValue processes a non-delimiter token (string, number, bool, null).
 // Returns the emitted value and true if a value should be returned to the caller.
 func (tr *TokenReader) handleValue(token json.Token) (any, bool) {
-	switch tr.states[len(tr.states)-1] {
-	case stateArrayStart:
-		tr.states[len(tr.states)-1] = stateArrayValue
-		fallthrough
-	case stateArrayValue:
-		return []any{tr.copyPath(), token}, true
-	case stateObjectStart, stateObjectValue:
-		tr.states[len(tr.states)-1] = stateObjectKey
-		tr.path = append(tr.path, token)
-	case stateObjectKey:
-		tr.states[len(tr.states)-1] = stateObjectValue
-		return []any{tr.copyPath(), token}, true
-	default:
-		tr.states[len(tr.states)-1] = stateTopValue
-		return []any{tr.copyPath(), token}, true
+	if tr.isArrayContext() {
+		return tr.handleArrayValue(token)
 	}
-	return nil, false
+	return tr.handleNonArrayValue(token)
+}
+
+func (tr *TokenReader) isArrayContext() bool {
+	s := tr.currentState()
+	return s == stateArrayStart || s == stateArrayValue
+}
+
+func (tr *TokenReader) handleArrayValue(token json.Token) (any, bool) {
+	if tr.currentState() == stateArrayStart {
+		tr.setState(stateArrayValue)
+	}
+	return tr.emitPair(token), true
+}
+
+func (tr *TokenReader) handleNonArrayValue(token json.Token) (any, bool) {
+	s := tr.currentState()
+	if s == stateObjectStart || s == stateObjectValue {
+		tr.pushObjectKey(token)
+		return nil, false
+	}
+	return tr.emitLeafValue(token, s)
+}
+
+func (tr *TokenReader) emitLeafValue(token json.Token, s int) (any, bool) {
+	if s == stateObjectKey {
+		tr.setState(stateObjectValue)
+	} else {
+		tr.setState(stateTopValue)
+	}
+	return tr.emitPair(token), true
+}
+
+func (tr *TokenReader) pushObjectKey(token json.Token) {
+	tr.setState(stateObjectKey)
+	tr.path = append(tr.path, token)
+}
+
+func (tr *TokenReader) emitPair(token json.Token) any {
+	return []any{tr.copyPath(), token}
 }
 
 func (tr *TokenReader) copyPath() []any {

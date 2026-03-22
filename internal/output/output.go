@@ -25,15 +25,22 @@ type Options struct {
 func Write(w io.Writer, v any, opts Options) error {
 	if opts.Raw {
 		if s, ok := v.(string); ok {
-			if opts.Join {
-				_, err := fmt.Fprint(w, s)
-				return err
-			}
-			_, err := fmt.Fprintln(w, s)
-			return err
+			return writeRaw(w, s, opts.Join)
 		}
 	}
+	return writeFormatted(w, v, opts)
+}
 
+func writeRaw(w io.Writer, s string, join bool) error {
+	if join {
+		_, err := fmt.Fprint(w, s)
+		return err
+	}
+	_, err := fmt.Fprintln(w, s)
+	return err
+}
+
+func writeFormatted(w io.Writer, v any, opts Options) error {
 	if opts.JSON {
 		return writeJSON(w, v, opts)
 	}
@@ -41,22 +48,18 @@ func Write(w io.Writer, v any, opts Options) error {
 }
 
 func writeJSON(w io.Writer, v any, opts Options) error {
-	var data []byte
-	var err error
-
-	if opts.Compact {
-		data, err = json.Marshal(v)
-	} else {
-		data, err = json.MarshalIndent(v, "", indentString(opts))
-	}
+	data, err := marshalJSON(v, opts)
 	if err != nil {
 		return err
 	}
+	return writeAndTerminate(w, data, opts.Join)
+}
 
-	if _, err = w.Write(data); err != nil {
-		return err
+func marshalJSON(v any, opts Options) ([]byte, error) {
+	if opts.Compact {
+		return json.Marshal(v)
 	}
-	return terminateLine(w, opts.Join)
+	return json.MarshalIndent(v, "", indentString(opts))
 }
 
 func indentString(opts Options) string {
@@ -70,26 +73,38 @@ func indentString(opts Options) string {
 }
 
 func writeTOON(w io.Writer, v any, opts Options) error {
-	var encoderOpts []toon.EncoderOption
-
-	if opts.Tab {
-		encoderOpts = append(encoderOpts, toon.WithIndent(0))
-	} else if opts.Indent > 0 {
-		encoderOpts = append(encoderOpts, toon.WithIndent(opts.Indent))
-	}
-
-	if opts.Delimiter != 0 {
-		encoderOpts = append(encoderOpts, toon.WithArrayDelimiter(opts.Delimiter))
-	}
-
+	encoderOpts := buildTOONOpts(opts)
 	data, err := toon.Marshal(v, encoderOpts...)
 	if err != nil {
 		return err
 	}
-	if _, err = w.Write(data); err != nil {
+	return writeAndTerminate(w, data, opts.Join)
+}
+
+func buildTOONOpts(opts Options) []toon.EncoderOption {
+	var encoderOpts []toon.EncoderOption
+	encoderOpts = appendIndentOpt(encoderOpts, opts)
+	if opts.Delimiter != 0 {
+		encoderOpts = append(encoderOpts, toon.WithArrayDelimiter(opts.Delimiter))
+	}
+	return encoderOpts
+}
+
+func appendIndentOpt(opts []toon.EncoderOption, o Options) []toon.EncoderOption {
+	if o.Tab {
+		return append(opts, toon.WithIndent(0))
+	}
+	if o.Indent > 0 {
+		return append(opts, toon.WithIndent(o.Indent))
+	}
+	return opts
+}
+
+func writeAndTerminate(w io.Writer, data []byte, join bool) error {
+	if _, err := w.Write(data); err != nil {
 		return err
 	}
-	return terminateLine(w, opts.Join)
+	return terminateLine(w, join)
 }
 
 // terminateLine writes a newline unless join mode is active.
