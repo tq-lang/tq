@@ -76,8 +76,14 @@ func (e *varArgExtractor) processArg(args []string, i int) (int, error) {
 	return e.consumeVarPair(args, i, a)
 }
 
+// jq-style variable flags.
+const (
+	argFlag     = "--arg"
+	argJSONFlag = "--argjson"
+)
+
 func isVarFlag(a string) bool {
-	return a == "--arg" || a == "--argjson"
+	return a == argFlag || a == argJSONFlag
 }
 
 func (e *varArgExtractor) consumeVarPair(args []string, i int, a string) (int, error) {
@@ -96,7 +102,7 @@ func checkVarPairArgs(args []string, i int, a string) error {
 }
 
 func (e *varArgExtractor) appendVarPair(flagName, name, value string) {
-	if flagName == "--arg" {
+	if flagName == argFlag {
 		e.argPairs = append(e.argPairs, name, value)
 	} else {
 		e.argjsonPairs = append(e.argjsonPairs, name, value)
