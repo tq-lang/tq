@@ -45,6 +45,14 @@ Three-layer system for structured development:
 
 Agent personas live in `.claude/agents/` (dev.md, reviewer.md, test-doc.md). Commands in `.claude/commands/`. Skills in `.claude/skills/` with multi-phase orchestration (e.g. `/tq-e2e` runs `triage.md` then `fix.md`).
 
+## Hooks (`.claude/settings.json`)
+
+Enforced policy that doesn't rely on the agent remembering it. Scripts in `.claude/hooks/` (POSIX sh, `jq`-parsed, fail open). Restart the session after editing them to reload.
+
+- **`block-no-verify.sh`** — PreToolUse(Bash): blocks `git commit/push --no-verify`, keeping the quality gate non-optional. Quote-aware, so `--no-verify` inside a commit message is allowed.
+- **`gofmt.sh`** — PostToolUse(Edit|Write): runs `gofmt -w` on edited `.go` files to cut lint churn before `/tq-check`.
+- **`guard-secrets.sh`** — PreToolUse(Read): blocks reads of secret files (`.env`, `*.pem`, `*.key`, ssh keys, credentials); `.env.example`/`.sample`/`.template` are allowed.
+
 ## Linters (`.golangci.yml`)
 
 Enabled beyond defaults: gocritic (diagnostic + style + performance), errorlint, nilerr, reassign, wastedassign, forcetypeassert, exhaustive, errchkjson, perfsprint, forbidigo, nolintlint, bodyclose, asciicheck, bidichk, copyloopvar, durationcheck, errname, goconst, nakedret, usestdlibvars, whitespace, makezero, intrange, mirror, tparallel, dupl (75 tokens), maintidx (under 60), funlen (60 lines / 40 statements). `errcheck.check-type-assertions: true`. gocyclo max complexity: 10 (Go best practice — refactor if exceeded, never raise). Source files max 500 LOC, test files max 1000 LOC.
