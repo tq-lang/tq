@@ -33,6 +33,10 @@ release:
   footer: |
     **Full Changelog**: https://github.com/tq-lang/tq/blob/main/CHANGELOG.md
 
+# NOTE: `brews` is deprecated in favor of `homebrew_casks`, but we keep it
+# deliberately. Homebrew Casks are macOS-only; this formula's on_linux blocks
+# keep `brew install` working on Linux too. Revisit only if goreleaser removes
+# `brews` outright (then Linux users move to the release tarballs).
 brews:
   - repository:
       owner: tq-lang

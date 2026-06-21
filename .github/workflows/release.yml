@@ -36,6 +36,10 @@ jobs:
         id: homebrew_tap_app_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
+          # `app-id` is deprecated in favor of `client-id`, but kept on purpose:
+          # client-id expects the App's Client ID (a different value than the
+          # numeric App ID stored in this secret), so switching needs a new
+          # secret. app-id still works; the deprecation warning is harmless.
           app-id: ${{ secrets.HOMEBREW_TAP_APP_ID }}
           private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
           owner: tq-lang
